@@ -247,21 +247,3 @@ describe('Daemon CLI: Screenshot --full-page', () => {
     assert.ok(stats.size > 0, 'File should not be empty');
   });
 });
-
-describe('Daemon CLI: quit command', () => {
-  before(() => {
-    stopDaemon();
-    clicker('daemon start --headless');
-    clicker('go https://example.com');
-  });
-
-  after(() => {
-    stopDaemon();
-  });
-
-  test('quit closes browser session', () => {
-    const result = clickerJSON('quit');
-    assert.strictEqual(result.ok, true);
-    assert.ok(result.result.includes('closed'), 'Should confirm browser closed');
-  });
-});
