@@ -69,6 +69,8 @@ vibium press Enter                    # press a key
 
 Full command list: [SKILL.md](skills/vibe-check/SKILL.md)
 
+Screenshots (including `--annotate` captures) save to `~/Pictures/Vibium/` by default — `%USERPROFILE%\Pictures\Vibium\` on Windows. The directory is created on first capture, so there's no need to create `~/Pictures` yourself. Override the location with `--screenshot-dir <path>` when starting the daemon or MCP server, or pass `--screenshot-dir ""` to disable file saving.
+
 **Alternative: MCP server** (for structured tool use instead of CLI):
 
 ```bash
