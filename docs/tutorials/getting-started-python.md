@@ -60,9 +60,10 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 ```bash
 pip install vibium
+vibium install
 ```
 
-This downloads Vibium and the vibium binary for your platform. Chrome downloads automatically on first run (or run `vibium install` to pre-download it).
+The first command downloads Vibium and the vibium binary for your platform. The second downloads Chrome for Testing and chromedriver so your first script does not have to. (Chrome also downloads automatically on first run, so this step is optional — but pre-downloading makes the first run fast and rules out install problems before you write any code.)
 
 | Platform | Cache path |
 |----------|------------|
@@ -189,6 +190,16 @@ Then install vibium:
 ```bash
 pip install vibium
 ```
+
+### "BrowserCrashedError: ... chromedriver not found"
+
+The browser binaries have not been downloaded yet. With your virtual environment active, run:
+
+```bash
+vibium install
+```
+
+Then re-run your script.
 
 ### Browser doesn't open
 
