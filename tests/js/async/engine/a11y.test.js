@@ -230,6 +230,55 @@ describe('Page Accessibility: a11yTree()', () => {
     assert.ok(levels.includes(3), 'should have h3 level=3');
   });
 
+  test('names buttons, links and headings from their text content', async () => {
+    await vibe.setContent(`
+      <button>Save</button>
+      <button aria-label="Close">X</button>
+      <a href="#x">Documentation</a>
+      <h2>Section Heading</h2>
+    `);
+    const tree = await vibe.a11yTree();
+
+    function findAll(node, role) {
+      const found = [];
+      if (node.role === role) found.push(node);
+      if (node.children) {
+        for (const child of node.children) {
+          found.push(...findAll(child, role));
+        }
+      }
+      return found;
+    }
+
+    const buttonNames = findAll(tree, 'button').map(n => n.name);
+    assert.ok(buttonNames.includes('Save'), `button should be named from its text, got: ${buttonNames.join(', ')}`);
+    assert.ok(buttonNames.includes('Close'), `aria-label should still win over text, got: ${buttonNames.join(', ')}`);
+    assert.strictEqual(findAll(tree, 'link')[0].name, 'Documentation');
+    assert.strictEqual(findAll(tree, 'heading')[0].name, 'Section Heading');
+  });
+
+  test('does not name plain divs from their text content', async () => {
+    await vibe.setContent('<div role="region" aria-label="wrap"><div>Just some prose in a wrapper.</div><button>Go</button></div>');
+    const tree = await vibe.a11yTree({ everything: true });
+
+    function findAll(node, role) {
+      const found = [];
+      if (node.role === role) found.push(node);
+      if (node.children) {
+        for (const child of node.children) {
+          found.push(...findAll(child, role));
+        }
+      }
+      return found;
+    }
+
+    const generics = findAll(tree, 'generic');
+    assert.ok(generics.length > 0, 'everything:true should surface the plain div');
+    for (const g of generics) {
+      assert.ok(!g.name, `plain div should stay nameless, got: "${g.name}"`);
+    }
+  });
+
   test('root option scopes tree to a subtree', async () => {
     await vibe.setContent(`
       <div>
