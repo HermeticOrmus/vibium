@@ -1263,6 +1263,38 @@ func buildSetValueScript(ep ElementParams, value string) (string, []map[string]i
 			} else {
 				el.value = value;
 			}
+			// Assigning through the value setter runs the input type's value
+			// sanitization algorithm, which discards a string it cannot parse
+			// without throwing: number and the date family fall back to "",
+			// range and color to a substitute value (issue #530). Report that
+			// as an error instead of 'ok' so the caller learns the field never
+			// took the value.
+			//
+			// Only wholesale rejection is an error. Sanitization also
+			// normalizes accepted values (range clamps and snaps, color
+			// lowercases and resolves CSS colors, text strips line breaks), so
+			// the value is not compared back byte-for-byte; each family is
+			// asked only whether its input was parseable at all. range uses
+			// the HTML valid-floating-point-number grammar (no whitespace, no
+			// leading +, no Infinity — measured on both engines); color asks
+			// the browser's own CSS parser, since engines accept named and
+			// functional colors. The empty string is exempt: clear writes ""
+			// through this same builder, and fill "" means clear (#187).
+			if (value !== '' && el instanceof window.HTMLInputElement) {
+				const t = el.type;
+				let rejected = false;
+				if (['number', 'date', 'time', 'month', 'week', 'datetime-local'].indexOf(t) !== -1) {
+					rejected = el.value === '';
+				} else if (t === 'range') {
+					rejected = !/^-?(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?$/.test(value);
+				} else if (t === 'color') {
+					rejected = !(window.CSS && CSS.supports('color', value));
+				}
+				if (rejected) {
+					return 'input[type=' + t + '] did not accept ' + JSON.stringify(value) +
+						'; the field holds ' + JSON.stringify(el.value);
+				}
+			}
 			el.dispatchEvent(new Event('input', { bubbles: true }));
 			el.dispatchEvent(new Event('change', { bubbles: true }));
 			return 'ok';
