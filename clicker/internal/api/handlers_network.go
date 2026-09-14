@@ -36,9 +36,6 @@ func (r *Router) handlePageRoute(session *BrowserSession, cmd bidiCommand) {
 			"contexts": []interface{}{context},
 		})
 		if err == nil {
-			if bidiErr := checkBidiError(resp); bidiErr != nil {
-				err = bidiErr
-			}
 		}
 		if err != nil {
 			session.routes.remove(context, pattern)
@@ -88,16 +85,11 @@ func (r *Router) handlePageUnroute(session *BrowserSession, cmd bidiCommand) {
 		return
 	}
 
-	resp, err := r.sendInternalCommand(session, "network.removeIntercept", map[string]interface{}{
+	_, err := r.sendInternalCommand(session, "network.removeIntercept", map[string]interface{}{
 		"intercept": intercept,
 	})
 	if err != nil {
 		r.sendError(session, cmd.ID, err)
-		return
-	}
-
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
 		return
 	}
 
@@ -135,14 +127,9 @@ func (r *Router) handleNetworkContinue(session *BrowserSession, cmd bidiCommand)
 		params["headers"] = convertHeadersToBidi(headers)
 	}
 
-	resp, err := r.sendInternalCommand(session, "network.continueRequest", params)
+	_, err := r.sendInternalCommand(session, "network.continueRequest", params)
 	if err != nil {
 		r.sendError(session, cmd.ID, err)
-		return
-	}
-
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
 		return
 	}
 
@@ -199,14 +186,9 @@ func (r *Router) handleNetworkFulfill(session *BrowserSession, cmd bidiCommand) 
 		params["headers"] = convertHeadersToBidi(headers)
 	}
 
-	resp, err := r.sendInternalCommand(session, "network.provideResponse", params)
+	_, err := r.sendInternalCommand(session, "network.provideResponse", params)
 	if err != nil {
 		r.sendError(session, cmd.ID, err)
-		return
-	}
-
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
 		return
 	}
 
@@ -225,14 +207,9 @@ func (r *Router) handleNetworkAbort(session *BrowserSession, cmd bidiCommand) {
 		"request": request,
 	}
 
-	resp, err := r.sendInternalCommand(session, "network.failRequest", params)
+	_, err := r.sendInternalCommand(session, "network.failRequest", params)
 	if err != nil {
 		r.sendError(session, cmd.ID, err)
-		return
-	}
-
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
 		return
 	}
 
@@ -276,11 +253,6 @@ func (r *Router) handlePageSetHeaders(session *BrowserSession, cmd bidiCommand) 
 	resp, err := r.sendInternalCommand(session, "network.addIntercept", interceptParams)
 	if err != nil {
 		r.sendError(session, cmd.ID, err)
-		return
-	}
-
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
 		return
 	}
 

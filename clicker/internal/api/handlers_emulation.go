@@ -33,13 +33,9 @@ func (r *Router) handlePageSetViewport(session *BrowserSession, cmd bidiCommand)
 		params["devicePixelRatio"] = dpr
 	}
 
-	resp, err := r.sendInternalCommand(session, "browsingContext.setViewport", params)
+	_, err = r.sendInternalCommand(session, "browsingContext.setViewport", params)
 	if err != nil {
 		r.sendError(session, cmd.ID, err)
-		return
-	}
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
 		return
 	}
 
@@ -166,7 +162,7 @@ func EmulateMedia(s Session, context string, overrides map[string]interface{}) e
 		return fmt.Errorf("failed to serialize overrides: %w", err)
 	}
 
-	resp, err := s.SendBidiCommand("script.callFunction", map[string]interface{}{
+	_, err = s.SendBidiCommand("script.callFunction", map[string]interface{}{
 		"functionDeclaration": emulateMediaScript,
 		"target":              map[string]interface{}{"context": context},
 		"arguments": []map[string]interface{}{
@@ -175,10 +171,7 @@ func EmulateMedia(s Session, context string, overrides map[string]interface{}) e
 		"awaitPromise":    false,
 		"resultOwnership": "root",
 	})
-	if err != nil {
-		return err
-	}
-	return checkBidiError(resp)
+	return err
 }
 
 // handlePageSetContent handles vibium:page.setContent — replaces the page HTML.
@@ -204,13 +197,9 @@ func (r *Router) handlePageSetContent(session *BrowserSession, cmd bidiCommand) 
 		"resultOwnership": "root",
 	}
 
-	resp, err := r.sendInternalCommand(session, "script.callFunction", params)
+	_, err = r.sendInternalCommand(session, "script.callFunction", params)
 	if err != nil {
 		r.sendError(session, cmd.ID, err)
-		return
-	}
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
 		return
 	}
 
@@ -322,9 +311,6 @@ func activeClientWindow(s Session) (*WindowInfo, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get window: %w", err)
 	}
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		return nil, "", bidiErr
-	}
 
 	var getResult struct {
 		Result struct {
@@ -393,11 +379,11 @@ func SetWindow(s Session, opts SetWindowOpts) error {
 		return fmt.Errorf("unsupported window state: %s", opts.State)
 	}
 
-	resp, err := s.SendBidiCommand("browser.setClientWindowState", params)
+	_, err = s.SendBidiCommand("browser.setClientWindowState", params)
 	if err != nil {
 		return fmt.Errorf("failed to set window: %w", err)
 	}
-	return checkBidiError(resp)
+	return nil
 }
 
 // ViewportCenter returns the viewport's center point. Pointer actions with a
@@ -461,7 +447,7 @@ func SetGeolocation(s Session, context string, lat, lon, accuracy float64) error
 	})
 	decl := geolocationScript(string(coordsJSON))
 
-	resp, err := s.SendBidiCommand("script.callFunction", map[string]interface{}{
+	_, err := s.SendBidiCommand("script.callFunction", map[string]interface{}{
 		"functionDeclaration": decl,
 		"target":              map[string]interface{}{"context": context},
 		"awaitPromise":        false,
@@ -470,19 +456,13 @@ func SetGeolocation(s Session, context string, lat, lon, accuracy float64) error
 	if err != nil {
 		return err
 	}
-	if err := checkBidiError(resp); err != nil {
-		return err
-	}
 
 	// The call above dies with the document, so a navigation or reload
 	// silently dropped the override (#345). Register the same script as a
 	// preload so every new document in this context gets it re-applied.
-	resp, err = s.SendBidiCommand("script.addPreloadScript", map[string]interface{}{
+	_, err = s.SendBidiCommand("script.addPreloadScript", map[string]interface{}{
 		"functionDeclaration": decl,
 		"contexts":            []interface{}{context},
 	})
-	if err != nil {
-		return err
-	}
-	return checkBidiError(resp)
+	return err
 }

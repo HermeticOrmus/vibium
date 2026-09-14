@@ -275,13 +275,10 @@ func (r *Router) OnClientConnect(client ClientTransport) {
 	// it does not implement (navigationAborted), which used to silence every
 	// event on the Firefox path (#348).
 	bidi.SubscribeEvents(func(events []string) error {
-		resp, err := r.sendInternalCommand(session, "session.subscribe", map[string]interface{}{
+		_, err := r.sendInternalCommand(session, "session.subscribe", map[string]interface{}{
 			"events": events,
 		})
-		if err != nil {
-			return err
-		}
-		return checkBidiError(resp)
+		return err
 	}, []string{
 		"browsingContext.contextCreated",
 		"network.beforeRequestSent",
@@ -1280,6 +1277,14 @@ func (r *Router) sendInternalCommandWithTimeout(session *BrowserSession, method 
 		session.internalCmdsMu.Unlock()
 		return nil, modelCtx.Err()
 	case resp := <-ch:
+		// An engine-level rejection arrives as a normal response whose
+		// payload is an error envelope, invisible to callers that only
+		// check err (#509). Return it as a Go error so every call site
+		// gets the check by default, matching bidi.Client, the other
+		// Session transport.
+		if bidiErr := checkBidiError(resp); bidiErr != nil {
+			return nil, bidiErr
+		}
 		return resp, nil
 	case <-time.After(timeout):
 		session.internalCmdsMu.Lock()
@@ -1299,8 +1304,8 @@ func (r *Router) probeBrowser(session *BrowserSession) bool {
 	if session.BidiConn == nil {
 		return false
 	}
-	resp, err := r.sendInternalCommandWithTimeout(session, "browsingContext.getTree", map[string]interface{}{}, 2*time.Second)
-	return err == nil && checkBidiError(resp) == nil
+	_, err := r.sendInternalCommandWithTimeout(session, "browsingContext.getTree", map[string]interface{}{}, 2*time.Second)
+	return err == nil
 }
 
 // closeSession closes a browser session and cleans up resources.

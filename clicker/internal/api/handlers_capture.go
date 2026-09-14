@@ -41,11 +41,6 @@ func (r *Router) handlePageScreenshot(session *BrowserSession, cmd bidiCommand) 
 		return
 	}
 
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
-		return
-	}
-
 	var ssResult struct {
 		Result struct {
 			Data string `json:"data"`
@@ -124,11 +119,6 @@ func (r *Router) handlePagePDF(session *BrowserSession, cmd bidiCommand) {
 		return
 	}
 
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
-		return
-	}
-
 	var printResult struct {
 		Result struct {
 			Data string `json:"data"`
@@ -202,9 +192,6 @@ func Screenshot(s Session, context string, fullPage bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		return "", bidiErr
-	}
 
 	var ssResult struct {
 		Result struct {
@@ -225,9 +212,6 @@ func PrintToPDF(s Session, context string, opts map[string]interface{}) (string,
 	resp, err := s.SendBidiCommand("browsingContext.print", printParams(context, opts))
 	if err != nil {
 		return "", err
-	}
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		return "", bidiErr
 	}
 
 	var printResult struct {
