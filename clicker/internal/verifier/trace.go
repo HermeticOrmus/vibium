@@ -224,12 +224,12 @@ func (s *TraceSource) Execute(ctx context.Context, name string, args map[string]
 			}
 		}
 		if ev == nil {
-			return Observation{}, fmt.Errorf("unknown trace event ID")
+			return Observation{}, &ActionError{Err: fmt.Errorf("unknown trace event ID")}
 		}
 		switch name {
 		case "trace_inspect_action":
 			if ev.data["type"] != "before" {
-				return Observation{}, fmt.Errorf("ID is not an action")
+				return Observation{}, &ActionError{Err: fmt.Errorf("ID is not an action")}
 			}
 			parts := []interface{}{s.project(*ev)}
 			for _, e := range s.events {
@@ -240,7 +240,7 @@ func (s *TraceSource) Execute(ctx context.Context, name string, args map[string]
 			return traceTextPage(parts, offset), nil
 		case "trace_inspect_snapshot":
 			if ev.data["type"] != "frame-snapshot" {
-				return Observation{}, fmt.Errorf("ID is not a DOM snapshot")
+				return Observation{}, &ActionError{Err: fmt.Errorf("ID is not a DOM snapshot")}
 			}
 			text, err := s.snapshotText(*ev)
 			if err != nil {
@@ -249,7 +249,7 @@ func (s *TraceSource) Execute(ctx context.Context, name string, args map[string]
 			return traceTextPage(map[string]interface{}{"snapshot": s.project(*ev), "content": text}, offset), nil
 		case "trace_inspect_screenshot":
 			if ev.data["type"] != "screencast-frame" {
-				return Observation{}, fmt.Errorf("ID is not a screenshot")
+				return Observation{}, &ActionError{Err: fmt.Errorf("ID is not a screenshot")}
 			}
 			sha := stringField(ev.data, "sha1")
 			if sha == "" {
