@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -104,6 +105,37 @@ func TestTraceReadOnlyTools(t *testing.T) {
 	after, _ := os.ReadFile(p)
 	if sha256.Sum256(before) != sha256.Sum256(after) {
 		t.Fatal("modified input")
+	}
+}
+// A wrong event ID is a model guess about what to inspect, the archive-mode
+// version of a guessed selector, so the loop must receive it as an
+// ActionError and return it to the model. Argument-shape and policy errors
+// stay fatal.
+func TestTraceIDErrorsAreActionErrors(t *testing.T) {
+	s, err := OpenTrace(context.Background(), archive(t, map[string]string{"trace.trace": traceFixture}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ids := map[string]string{}
+	for _, e := range s.events {
+		ids[stringField(e.data, "type")] = e.id
+	}
+	for _, tc := range []struct{ name, tool, id string }{
+		{"unknown ID", "trace_inspect_action", "nope"},
+		{"not an action", "trace_inspect_action", ids["frame-snapshot"]},
+		{"not a DOM snapshot", "trace_inspect_snapshot", ids["before"]},
+		{"not a screenshot", "trace_inspect_screenshot", ids["before"]},
+	} {
+		_, err := s.Execute(context.Background(), tc.tool, map[string]interface{}{"id": tc.id})
+		var action *ActionError
+		if !errors.As(err, &action) {
+			t.Errorf("%s: got %v, want ActionError", tc.name, err)
+		}
+	}
+	_, err = s.Execute(context.Background(), "trace_inspect_action", map[string]interface{}{"id": 5.0})
+	if err == nil || errors.As(err, new(*ActionError)) {
+		t.Errorf("invalid argument type: got %v, want a fatal non-action error", err)
 	}
 }
 func TestTraceRejectsMalformedArchives(t *testing.T) {
