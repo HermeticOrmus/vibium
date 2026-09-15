@@ -29,6 +29,7 @@ export {
   ConnectionError,
   TimeoutError,
   ElementNotFoundError,
+  BiDiError,
   BrowserCrashedError,
 } from './utils/errors';
 
