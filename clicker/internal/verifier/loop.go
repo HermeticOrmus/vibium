@@ -3,6 +3,7 @@ package verifier
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -72,7 +73,14 @@ func (v *OpenAI) Run(ctx context.Context, config Config, op Operation, executor 
 			actions++
 			obs, err := executor.Execute(ctx, call.Function.Name, args)
 			if err != nil {
-				return LoopResult{}, fmt.Errorf("verifier browser action: %w", err)
+				var action *ActionError
+				if !errors.As(err, &action) {
+					return LoopResult{}, fmt.Errorf("verifier browser action: %w", err)
+				}
+				// A failed action is a tool result, not a fatal error, so the
+				// model can correct a bad selector. MaxActions bounds retries.
+				messages = append(messages, message{Role: "tool", ToolCallID: call.ID, Content: Clip("Error: " + action.Error())})
+				continue
 			}
 			messages = append(messages, message{Role: "tool", ToolCallID: call.ID, Content: Clip(obs.Text)})
 			if obs.Image != "" {

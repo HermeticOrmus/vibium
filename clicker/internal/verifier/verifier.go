@@ -184,6 +184,16 @@ type ToolExecutor interface {
 	Tools() []Tool
 	Execute(context.Context, string, map[string]interface{}) (Observation, error)
 }
+
+// ActionError marks a browser action that failed because of what the model
+// asked for (bad selector, element not found, action timeout). The loop
+// returns it to the model as a tool result so it can correct course; every
+// other executor error stays fatal.
+type ActionError struct{ Err error }
+
+func (e *ActionError) Error() string { return e.Err.Error() }
+func (e *ActionError) Unwrap() error { return e.Err }
+
 type Verifier interface {
 	Check(context.Context, Request, ToolExecutor) (Result, error)
 }
