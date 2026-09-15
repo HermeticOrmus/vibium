@@ -274,7 +274,8 @@ func (v *apiModelTools) Execute(ctx context.Context, name string, args map[strin
 		script := `(selector) => { ` + PierceQueryJS() + `; const el = pierceQuery(document,selector); return String(!!el && (el.type === 'password' || el.autocomplete === 'current-password' || el.autocomplete === 'new-password')); }`
 		data, err := CallScript(NewAPISession(v.r, v.session, v.page), v.page, script, []map[string]interface{}{{"type": "string", "value": selector}})
 		if err != nil {
-			return verifier.Observation{}, err
+			// Usually a model-supplied selector the engine rejects; recoverable.
+			return verifier.Observation{}, &verifier.ActionError{Err: fmt.Errorf("cannot inspect verifier target")}
 		}
 		secret, err := parseScriptResult(data)
 		if err != nil {
@@ -379,7 +380,7 @@ func (v *apiModelTools) Execute(ctx context.Context, name string, args map[strin
 		}
 	}
 	if reply.err != nil {
-		return verifier.Observation{}, reply.err
+		return verifier.Observation{}, &verifier.ActionError{Err: reply.err}
 	}
 	if name == "browser_screenshot" {
 		m, _ := reply.result.(map[string]interface{})
