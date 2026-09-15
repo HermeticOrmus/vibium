@@ -295,7 +295,8 @@ func (v *modelTools) Execute(ctx context.Context, name string, args map[string]i
 		script := `(selector) => { ` + api.PierceQueryJS() + `; let el = selector ? pierceQuery(document, selector) : document.activeElement; while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement; return !!el && (el.type === 'password' || el.autocomplete === 'current-password' || el.autocomplete === 'new-password'); }`
 		secret, err := v.h.client.CallFunction(v.page, script, []interface{}{v.h.resolveSelector(selector)})
 		if err != nil {
-			return verifier.Observation{}, fmt.Errorf("cannot inspect verifier target")
+			// Usually a model-supplied selector the engine rejects; recoverable.
+			return verifier.Observation{}, &verifier.ActionError{Err: fmt.Errorf("cannot inspect verifier target")}
 		}
 		if secret == true && !v.policy.AllowsCredentialInput(name) {
 			if v.policy.CredentialInput {
@@ -307,7 +308,7 @@ func (v *modelTools) Execute(ctx context.Context, name string, args map[string]i
 	clean["page"] = v.page
 	result, err := v.h.Call(name, clean)
 	if err != nil {
-		return verifier.Observation{}, err
+		return verifier.Observation{}, &verifier.ActionError{Err: err}
 	}
 	var obs verifier.Observation
 	for _, c := range result.Content {

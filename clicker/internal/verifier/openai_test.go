@@ -12,9 +12,10 @@ import (
 )
 
 type fakeTools struct {
-	calls []string
-	image bool
-	err   error
+	calls    []string
+	image    bool
+	err      error
+	errAfter int // return err only once this many calls have completed
 }
 
 func (f *fakeTools) Tools() []Tool {
@@ -26,7 +27,10 @@ func (f *fakeTools) Execute(ctx context.Context, name string, args map[string]in
 	if f.image && len(f.calls) > 3 {
 		obs.Image = "cG5n"
 	}
-	return obs, f.err
+	if f.err != nil && len(f.calls) > f.errAfter {
+		return Observation{}, f.err
+	}
+	return obs, nil
 }
 func testRequest(base string) Request {
 	return Request{Claim: "name persists", Config: Config{Provider: "openai-compatible", Model: "test-model", BaseURL: base, APIKey: "test-secret"}}
@@ -133,6 +137,44 @@ func TestProviderErrorsAndVerdicts(t *testing.T) {
 				t.Fatal("executed denied tool")
 			}
 		})
+	}
+}
+func TestActionErrorReturnedToModel(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		var body struct {
+			Messages []message `json:"messages"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		if requests == 1 {
+			answer(w, nil, calls("browser_map", 1))
+			return
+		}
+		last := body.Messages[len(body.Messages)-1]
+		content, _ := last.Content.(string)
+		if last.Role != "tool" || !strings.Contains(content, "Error: failed to click: element not found") {
+			t.Errorf("action failure not delivered as tool result: role=%q content=%q", last.Role, content)
+		}
+		answer(w, verdict, nil)
+	}))
+	defer server.Close()
+	// The 3 initial observations succeed; the model's own call fails.
+	tools := &fakeTools{err: &ActionError{Err: fmt.Errorf("failed to click: element not found")}, errAfter: 3}
+	result, err := (&OpenAI{}).Check(context.Background(), testRequest(server.URL), tools)
+	if err != nil || result.Status != "passed" || requests != 2 {
+		t.Fatalf("result=%+v err=%v requests=%d", result, err, requests)
+	}
+}
+func TestNonActionErrorStaysFatal(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		answer(w, nil, calls("browser_map", 1))
+	}))
+	defer server.Close()
+	tools := &fakeTools{err: fmt.Errorf("browser connection lost"), errAfter: 3}
+	_, err := (&OpenAI{}).Check(context.Background(), testRequest(server.URL), tools)
+	if err == nil || !strings.Contains(err.Error(), "verifier browser action") {
+		t.Fatalf("expected fatal browser action error, got: %v", err)
 	}
 }
 func TestActionBudget(t *testing.T) {
