@@ -59,7 +59,7 @@ func (v *OpenAI) Check(ctx context.Context, req Request, executor ToolExecutor) 
 }
 
 // complete requests one model turn. A non-empty force names a tool the model
-// must call; it is applied on the native providers only, so the compatibility
+// must call; it is applied on native openai and xai only, so the compatibility
 // floor for openai-compatible and local servers stays at plain function tools.
 func (v *Model) complete(ctx context.Context, config Config, messages []message, functions []interface{}, force string) (message, error) {
 	switch config.Provider {
@@ -75,7 +75,7 @@ func (v *Model) complete(ctx context.Context, config Config, messages []message,
 func (v *Model) completeOpenAI(ctx context.Context, config Config, messages []message, functions []interface{}, force string) (message, error) {
 	base := config.Endpoint()
 	payload := map[string]interface{}{"model": config.Model, "messages": messages, "tools": functions, "parallel_tool_calls": false, "max_completion_tokens": MaxOutputTokens}
-	if force != "" && config.Provider == "openai" {
+	if force != "" && (config.Provider == "openai" || config.Provider == "xai") {
 		payload["tool_choice"] = map[string]interface{}{"type": "function", "function": map[string]string{"name": force}}
 	}
 	if config.ReasoningEffort != "" {

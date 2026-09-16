@@ -1,6 +1,6 @@
 /** Per-call settings. Omitted values use this operation's runtime environment. */
 export interface ModelOptions {
-  provider?: 'openai' | 'anthropic' | 'google' | 'openai-compatible' | 'local';
+  provider?: 'openai' | 'xai' | 'anthropic' | 'google' | 'openai-compatible' | 'local';
   model?: string;
   /** Empty string resets the endpoint to the provider default. */
   baseURL?: string;
