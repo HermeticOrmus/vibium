@@ -96,6 +96,90 @@ func TestFreshContextAndToolLoop(t *testing.T) {
 		}
 	}
 }
+func verdictCall(id, arguments string) []interface{} {
+	return []interface{}{map[string]interface{}{"id": id, "type": "function", "function": map[string]string{"name": "return_verdict", "arguments": arguments}}}
+}
+
+// The verdict arrives as a return_verdict tool call and its arguments are the
+// result; no free-text JSON parse is involved.
+func TestVerdictDeliveredViaToolCall(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		answer(w, nil, verdictCall("v1", verdict))
+	}))
+	defer server.Close()
+	result, err := (&OpenAI{}).Check(context.Background(), testRequest(server.URL), &fakeTools{})
+	if err != nil || result.Status != "passed" || result.Claim != "name persists" || requests != 1 {
+		t.Fatalf("result=%+v err=%v requests=%d", result, err, requests)
+	}
+}
+
+// Invalid verdict arguments go back to the model as a tool result so it can
+// correct itself, instead of failing the run.
+func TestInvalidVerdictToolArgsReturnToModel(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		var body struct {
+			Messages []message `json:"messages"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		if requests == 1 {
+			answer(w, nil, verdictCall("v1", `{"status":"maybe","summary":"unsure"}`))
+			return
+		}
+		last := body.Messages[len(body.Messages)-1]
+		content, _ := last.Content.(string)
+		if last.Role != "tool" || last.ToolCallID != "v1" || !strings.Contains(content, "Error:") || !strings.Contains(content, "return_verdict") {
+			t.Errorf("invalid arguments not returned as tool result: %+v", last)
+		}
+		answer(w, nil, verdictCall("v2", verdict))
+	}))
+	defer server.Close()
+	result, err := (&OpenAI{}).Check(context.Background(), testRequest(server.URL), &fakeTools{})
+	if err != nil || result.Status != "passed" || requests != 2 {
+		t.Fatalf("result=%+v err=%v requests=%d", result, err, requests)
+	}
+}
+
+// On the corrective turn after a plain-text final message, the openai
+// provider forces return_verdict via tool_choice; openai-compatible keeps
+// auto so the compatibility floor stays at plain function tools.
+func TestRepairTurnForcesVerdictTool(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		var body struct {
+			ToolChoice *struct {
+				Type     string `json:"type"`
+				Function struct {
+					Name string `json:"name"`
+				} `json:"function"`
+			} `json:"tool_choice"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		if requests == 1 {
+			if body.ToolChoice != nil {
+				t.Error("tool choice forced before any failure")
+			}
+			answer(w, "The evidence is clear: "+verdict, nil)
+			return
+		}
+		if body.ToolChoice == nil || body.ToolChoice.Type != "function" || body.ToolChoice.Function.Name != "return_verdict" {
+			t.Errorf("corrective turn did not force return_verdict: %+v", body.ToolChoice)
+		}
+		answer(w, nil, verdictCall("v1", verdict))
+	}))
+	defer server.Close()
+	req := testRequest(server.URL)
+	req.Config.Provider = "openai"
+	result, err := (&OpenAI{}).Check(context.Background(), req, &fakeTools{})
+	if err != nil || result.Status != "passed" || requests != 2 {
+		t.Fatalf("result=%+v err=%v requests=%d", result, err, requests)
+	}
+}
+
 // A final message that fails the strict parse gets one corrective turn
 // instead of discarding the completed verification; a repeated failure
 // keeps the original error.
@@ -115,7 +199,7 @@ func TestInvalidVerdictGetsOneRepairTurn(t *testing.T) {
 		content, _ := last.Content.(string)
 		prior := body.Messages[len(body.Messages)-2]
 		priorContent, _ := prior.Content.(string)
-		if last.Role != "user" || !strings.Contains(content, "JSON object") || prior.Role != "assistant" || !strings.Contains(priorContent, "The evidence is clear") {
+		if last.Role != "user" || !strings.Contains(content, "return_verdict") || prior.Role != "assistant" || !strings.Contains(priorContent, "The evidence is clear") {
 			t.Errorf("corrective turn malformed: prior=%+v last=%+v", prior, last)
 		}
 		answer(w, verdict, nil)

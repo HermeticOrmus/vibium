@@ -162,7 +162,7 @@ func TestRecordedVerifierLoop(t *testing.T) {
 		}
 		json.NewDecoder(r.Body).Decode(&body)
 		for _, tool := range body.Tools {
-			if !strings.HasPrefix(tool.Function.Name, "trace_") {
+			if !strings.HasPrefix(tool.Function.Name, "trace_") && tool.Function.Name != "return_verdict" {
 				t.Error("live tool exposed")
 			}
 		}
