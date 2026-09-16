@@ -18,6 +18,12 @@ type Operation struct {
 	// for the JSON object again; a repeated failure returns the content so
 	// the caller fails exactly as it would without the retry.
 	ValidateResult func(content string) error
+	// ResultTool, when set, is offered to the model alongside the executor's
+	// tools; a call to it delivers the result as tool arguments, validated by
+	// ValidateResult. Invalid arguments return to the model as a tool result,
+	// bounded by MaxActions. The corrective turn for a plain-text final
+	// message forces this tool on native providers.
+	ResultTool Tool
 }
 type LoopResult struct {
 	Content      string
@@ -45,16 +51,21 @@ func (v *OpenAI) Run(ctx context.Context, config Config, op Operation, executor 
 		allowed[tool.Name] = true
 		functions = append(functions, map[string]interface{}{"type": "function", "function": tool})
 	}
+	if op.ResultTool.Name != "" {
+		functions = append(functions, map[string]interface{}{"type": "function", "function": op.ResultTool})
+	}
 	actions := 0
 	repaired := false
+	force := ""
 	for turn := 0; turn <= MaxActions; turn++ {
 		if err := ctx.Err(); err != nil {
 			return LoopResult{}, fmt.Errorf("verification timeout: %w", err)
 		}
-		msg, err := v.complete(ctx, config, messages, functions)
+		msg, err := v.complete(ctx, config, messages, functions, force)
 		if err != nil {
 			return LoopResult{}, err
 		}
+		force = ""
 		if len(msg.ToolCalls) == 0 {
 			content, ok := msg.Content.(string)
 			if !ok {
@@ -62,9 +73,14 @@ func (v *OpenAI) Run(ctx context.Context, config Config, op Operation, executor 
 			}
 			if op.ValidateResult != nil && !repaired && op.ValidateResult(content) != nil {
 				repaired = true
+				corrective := "Your last message was not the required JSON object. Return ONLY the JSON object with the required fields and no other text."
+				if op.ResultTool.Name != "" {
+					corrective = "Your last message did not deliver the result. Call " + op.ResultTool.Name + " with the required fields."
+					force = op.ResultTool.Name
+				}
 				messages = append(messages,
 					message{Role: "assistant", Content: content},
-					message{Role: "user", Content: "Your last message was not the required JSON object. Return ONLY the JSON object with the required fields and no other text."})
+					message{Role: "user", Content: corrective})
 				continue
 			}
 			return LoopResult{Content: content}, nil
@@ -76,7 +92,28 @@ func (v *OpenAI) Run(ctx context.Context, config Config, op Operation, executor 
 		msg.Role, msg.Content = "assistant", nil
 		messages = append(messages, msg)
 		for _, call := range msg.ToolCalls {
-			if call.Type != "function" || call.ID == "" || !allowed[call.Function.Name] {
+			if call.Type != "function" || call.ID == "" {
+				return LoopResult{}, fmt.Errorf("verifier requested a disallowed tool")
+			}
+			if op.ResultTool.Name != "" && call.Function.Name == op.ResultTool.Name {
+				actions++
+				feedback := ""
+				if len(msg.ToolCalls) > 1 {
+					feedback = "Error: call " + op.ResultTool.Name + " alone, after all other tool calls have completed."
+				} else {
+					var invalid error
+					if op.ValidateResult != nil {
+						invalid = op.ValidateResult(call.Function.Arguments)
+					}
+					if invalid == nil {
+						return LoopResult{Content: call.Function.Arguments}, nil
+					}
+					feedback = "Error: " + invalid.Error() + ". Call " + op.ResultTool.Name + " again with a corrected object."
+				}
+				messages = append(messages, message{Role: "tool", ToolCallID: call.ID, Content: Clip(feedback)})
+				continue
+			}
+			if !allowed[call.Function.Name] {
 				return LoopResult{}, fmt.Errorf("verifier requested a disallowed tool")
 			}
 			args := map[string]interface{}{}

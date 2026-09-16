@@ -20,6 +20,24 @@ func (f *fixtureTools) Execute(_ context.Context, name string, args map[string]i
 	f.calls++
 	return verifier.Observation{Text: "goal observed"}, nil
 }
+// The result arrives as a return_result tool call and its arguments are the
+// result; no free-text JSON parse is involved.
+func TestRunResultViaToolCall(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		result, _ := json.Marshal(Result{Status: "completed", Summary: "Fixture result", Evidence: []verifier.Evidence{{Type: "observation", Summary: "Goal observed"}}})
+		call := map[string]interface{}{"id": "r1", "type": "function", "function": map[string]interface{}{"name": "return_result", "arguments": string(result)}}
+		json.NewEncoder(w).Encode(map[string]interface{}{"choices": []interface{}{map[string]interface{}{"finish_reason": "tool_calls", "message": map[string]interface{}{"role": "assistant", "tool_calls": []interface{}{call}}}}})
+	}))
+	defer server.Close()
+	req := Request{Goal: "the real goal", Config: verifier.Config{Role: "run", Provider: "local", Model: "fixture", BaseURL: server.URL}}
+	result, err := Run(context.Background(), req, &fixtureTools{})
+	if err != nil || result.Status != "completed" || result.Goal != req.Goal || requests != 1 {
+		t.Fatalf("result=%+v err=%v requests=%d", result, err, requests)
+	}
+}
+
 // The repair turn is wired for Run too: a result wrapped in prose gets one
 // corrective turn and the retried JSON parses.
 func TestRunRepairsInvalidResult(t *testing.T) {

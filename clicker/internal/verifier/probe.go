@@ -26,7 +26,7 @@ func (v *OpenAI) Probe(ctx context.Context, config Config) error {
 	}
 	tool := Tool{Name: "verifier_ping", Description: "Return a synthetic diagnostic verdict; no browser or external actions.", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{}, "additionalProperties": false}}
 	functions := []interface{}{map[string]interface{}{"type": "function", "function": tool}}
-	msg, err := v.complete(ctx, config, messages, functions)
+	msg, err := v.complete(ctx, config, messages, functions, "")
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (v *OpenAI) Probe(ctx context.Context, config Config) error {
 	// As in Check, free-form assistant content and reasoning are discarded.
 	msg.Role, msg.Content = "assistant", nil
 	messages = append(messages, msg, message{Role: "tool", ToolCallID: call.ID, Content: string(observation)})
-	msg, err = v.complete(ctx, config, messages, functions)
+	msg, err = v.complete(ctx, config, messages, functions, "")
 	if err != nil {
 		return err
 	}

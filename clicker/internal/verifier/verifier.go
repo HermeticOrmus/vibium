@@ -175,6 +175,28 @@ type Tool struct {
 	Description string                 `json:"description"`
 	Parameters  map[string]interface{} `json:"parameters"`
 }
+
+// ResultToolSchema describes a result object with the given status values, so
+// Check and Run can receive their result as validated tool arguments instead
+// of free text.
+func ResultToolSchema(statuses ...string) map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"status":  map[string]interface{}{"type": "string", "enum": statuses},
+			"summary": map[string]interface{}{"type": "string", "description": "Concise explanation of the result."},
+			"evidence": map[string]interface{}{"type": "array", "description": "Up to 12 observations supporting the result.", "items": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"type":    map[string]interface{}{"type": "string", "enum": []string{"observation"}},
+					"summary": map[string]interface{}{"type": "string"},
+				},
+				"required": []string{"type", "summary"},
+			}},
+		},
+		"required": []string{"status", "summary"},
+	}
+}
 type Observation struct {
 	Text  string
 	Image string // base64 PNG, only when explicitly requested

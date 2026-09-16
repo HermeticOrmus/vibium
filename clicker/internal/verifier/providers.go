@@ -180,7 +180,7 @@ func nativeHistory(messages []message, google bool) (string, []nativeTurn, error
 	return system, history, nil
 }
 
-func (v *Model) completeAnthropic(ctx context.Context, c Config, messages []message, functions []interface{}) (message, error) {
+func (v *Model) completeAnthropic(ctx context.Context, c Config, messages []message, functions []interface{}, force string) (message, error) {
 	system, history, err := nativeHistory(messages, false)
 	if err != nil {
 		return message{}, err
@@ -189,7 +189,11 @@ func (v *Model) completeAnthropic(ctx context.Context, c Config, messages []mess
 	for _, t := range toolDefinitions(functions) {
 		tools = append(tools, map[string]interface{}{"name": t.Name, "description": t.Description, "input_schema": t.Parameters})
 	}
-	data, err := v.post(ctx, c.Endpoint()+"/messages", map[string]interface{}{"model": c.Model, "system": system, "messages": history, "tools": tools, "max_tokens": MaxOutputTokens, "tool_choice": map[string]interface{}{"type": "auto", "disable_parallel_tool_use": true}}, map[string]string{"x-api-key": c.APIKey, "anthropic-version": "2023-06-01"})
+	choice := map[string]interface{}{"type": "auto", "disable_parallel_tool_use": true}
+	if force != "" {
+		choice = map[string]interface{}{"type": "tool", "name": force, "disable_parallel_tool_use": true}
+	}
+	data, err := v.post(ctx, c.Endpoint()+"/messages", map[string]interface{}{"model": c.Model, "system": system, "messages": history, "tools": tools, "max_tokens": MaxOutputTokens, "tool_choice": choice}, map[string]string{"x-api-key": c.APIKey, "anthropic-version": "2023-06-01"})
 	if err != nil {
 		return message{}, err
 	}
@@ -228,7 +232,7 @@ func (v *Model) completeAnthropic(ctx context.Context, c Config, messages []mess
 	return out, nil
 }
 
-func (v *Model) completeGoogle(ctx context.Context, c Config, messages []message, functions []interface{}) (message, error) {
+func (v *Model) completeGoogle(ctx context.Context, c Config, messages []message, functions []interface{}, force string) (message, error) {
 	system, history, err := nativeHistory(messages, true)
 	if err != nil {
 		return message{}, err
@@ -237,7 +241,11 @@ func (v *Model) completeGoogle(ctx context.Context, c Config, messages []message
 	for _, t := range toolDefinitions(functions) {
 		declarations = append(declarations, map[string]interface{}{"name": t.Name, "description": t.Description, "parametersJsonSchema": t.Parameters})
 	}
-	payload := map[string]interface{}{"systemInstruction": map[string]interface{}{"parts": []interface{}{map[string]string{"text": system}}}, "contents": history, "tools": []interface{}{map[string]interface{}{"functionDeclarations": declarations}}, "toolConfig": map[string]interface{}{"functionCallingConfig": map[string]string{"mode": "AUTO"}}, "generationConfig": map[string]interface{}{"maxOutputTokens": MaxOutputTokens}}
+	calling := map[string]interface{}{"mode": "AUTO"}
+	if force != "" {
+		calling = map[string]interface{}{"mode": "ANY", "allowedFunctionNames": []string{force}}
+	}
+	payload := map[string]interface{}{"systemInstruction": map[string]interface{}{"parts": []interface{}{map[string]string{"text": system}}}, "contents": history, "tools": []interface{}{map[string]interface{}{"functionDeclarations": declarations}}, "toolConfig": map[string]interface{}{"functionCallingConfig": calling}, "generationConfig": map[string]interface{}{"maxOutputTokens": MaxOutputTokens}}
 	model := strings.TrimPrefix(c.Model, "models/")
 	data, err := v.post(ctx, c.Endpoint()+"/models/"+url.PathEscape(model)+":generateContent", payload, map[string]string{"x-goog-api-key": c.APIKey})
 	if err != nil {
