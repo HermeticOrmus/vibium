@@ -472,3 +472,122 @@ func TestXAILoginOutputWriterOptional(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func assertNoXAISecrets(t *testing.T, data []byte, secrets ...string) {
+	t.Helper()
+	text := string(data)
+	for _, secret := range secrets {
+		if secret != "" && strings.Contains(text, secret) {
+			t.Fatalf("secret leaked: %s", text)
+		}
+	}
+	for _, key := range []string{"access_token", "refresh_token", "TokenExpiring", "path"} {
+		if strings.Contains(text, `"`+key+`"`) {
+			t.Fatalf("token or path field leaked: %s", text)
+		}
+	}
+}
+
+func TestXAILoginStatusAPIKeyWinsWithoutReadingTokens(t *testing.T) {
+	_, configDir := isolateXAIAuth(t)
+	writeVibiumAuth(t, configDir, "oauth-token-secret", "oauth-refresh-secret")
+	t.Setenv("XAI_API_KEY", "env-api-key-secret")
+	s, err := ReadXAILoginStatus()
+	if err != nil || s.Provider != "xai" || s.Active != CredentialAPIKey || !s.APIKey || s.OAuth.Source != "vibium" {
+		t.Fatalf("%+v %v", s, err)
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoXAISecrets(t, data, "env-api-key-secret", "oauth-token-secret", "oauth-refresh-secret")
+}
+
+func TestXAILoginStatusWhitespaceAPIKeyIsUnset(t *testing.T) {
+	isolateXAIAuth(t)
+	t.Setenv("XAI_API_KEY", "  \t")
+	s, err := ReadXAILoginStatus()
+	if err != nil || s.APIKey || s.Active != CredentialNone {
+		t.Fatalf("%+v %v", s, err)
+	}
+}
+
+func TestXAILoginStatusPrefersVibiumStoreOverGrok(t *testing.T) {
+	home, configDir := isolateXAIAuth(t)
+	vibium := jwtWithExp(time.Now().Add(time.Hour).Unix())
+	writeVibiumAuth(t, configDir, vibium, "vibium-refresh-secret")
+	writeGrokAuth(t, home, jwtWithExp(time.Now().Add(2*time.Hour).Unix()), "grok-refresh-secret")
+	s, err := ReadXAILoginStatus()
+	if err != nil || s.Active != CredentialOAuth || s.OAuth.Source != "vibium" || s.OAuth.Expired || s.TokenExpiring {
+		t.Fatalf("%+v %v", s, err)
+	}
+	if !strings.HasSuffix(s.Path, xaiAuthFileName) {
+		t.Fatalf("path=%s", s.Path)
+	}
+}
+
+func TestXAILoginStatusUsesGrokStoreWhenVibiumMissing(t *testing.T) {
+	home, _ := isolateXAIAuth(t)
+	writeGrokAuth(t, home, jwtWithExp(time.Now().Add(time.Hour).Unix()), "grok-refresh-secret")
+	s, err := ReadXAILoginStatus()
+	if err != nil || s.Active != CredentialOAuth || s.OAuth.Source != "grok" || s.OAuth.Expired {
+		t.Fatalf("%+v %v", s, err)
+	}
+	if !strings.Contains(s.Path, filepath.Join(".grok", "auth.json")) {
+		t.Fatalf("path=%s", s.Path)
+	}
+}
+
+func TestXAILoginStatusNoneWhenUnsigned(t *testing.T) {
+	isolateXAIAuth(t)
+	s, err := ReadXAILoginStatus()
+	if err != nil || s.Active != CredentialNone || s.APIKey || s.OAuth.Source != "" || s.OAuth.Expired {
+		t.Fatalf("%+v %v", s, err)
+	}
+}
+
+func TestXAILoginStatusExpiredJWTWithoutRefresh(t *testing.T) {
+	_, configDir := isolateXAIAuth(t)
+	now := time.Unix(1_700_000_000, 0)
+	xaiAuthNow = func() time.Time { return now }
+	writeVibiumAuth(t, configDir, jwtWithExp(now.Unix()-10), "")
+	s, err := ReadXAILoginStatus()
+	if err != nil || s.Active != CredentialNone || !s.OAuth.Expired || s.OAuth.Source != "vibium" {
+		t.Fatalf("%+v %v", s, err)
+	}
+}
+
+func TestXAILoginStatusDoesNotRefreshOrWrite(t *testing.T) {
+	home, configDir := isolateXAIAuth(t)
+	now := time.Unix(1_700_000_000, 0)
+	xaiAuthNow = func() time.Time { return now }
+	expired := jwtWithExp(now.Unix() - 10)
+	path := writeVibiumAuth(t, configDir, expired, "refresh-must-stay")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	grok := writeGrokAuth(t, home, "unused-grok-access", "unused-grok-refresh")
+	grokBefore, err := os.ReadFile(grok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	xaiAuthHTTP = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("login status contacted the network")
+		return nil, fmt.Errorf("network")
+	})}
+	s, err := ReadXAILoginStatus()
+	if err != nil || s.Active != CredentialOAuth || s.OAuth.Source != "vibium" || s.OAuth.Expired || !s.TokenExpiring {
+		t.Fatalf("%+v %v", s, err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || string(after) != string(before) {
+		t.Fatal("wrote xai-auth.json")
+	}
+	grokAfter, err := os.ReadFile(grok)
+	if err != nil || string(grokAfter) != string(grokBefore) {
+		t.Fatal("wrote grok auth.json")
+	}
+	data, _ := json.Marshal(s)
+	assertNoXAISecrets(t, data, expired, "refresh-must-stay", "unused-grok-access", "unused-grok-refresh")
+}

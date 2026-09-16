@@ -19,6 +19,7 @@ import (
 const (
 	CredentialAPIKey = "api_key"
 	CredentialOAuth  = "oauth"
+	CredentialNone   = "none"
 
 	xaiOIDCIssuer    = "https://auth.x.ai"
 	xaiOAuthClientID = "b1a00492-073a-47ea-816f-4c329264a828"
@@ -382,6 +383,51 @@ func LogoutXAI() error {
 		return err
 	}
 	return nil
+}
+
+// XAILoginStatus is the read-only xAI credential report for `vibium login status`.
+// JSON omits paths and tokens. Active is api_key, oauth, or none.
+type XAILoginStatus struct {
+	Provider      string       `json:"provider"`
+	Active        string       `json:"active"`
+	APIKey        bool         `json:"api_key"`
+	OAuth         XAIOAuthInfo `json:"oauth"`
+	Path          string       `json:"-"`
+	TokenExpiring bool         `json:"-"`
+}
+
+// XAIOAuthInfo names a stored Grok login without token values.
+type XAIOAuthInfo struct {
+	Source  string `json:"source"`
+	Expired bool   `json:"expired"`
+}
+
+// ReadXAILoginStatus reports which xAI credential runtime would use.
+// It does not refresh tokens, write stores, or contact the network.
+func ReadXAILoginStatus() (XAILoginStatus, error) {
+	status := XAILoginStatus{Provider: "xai", Active: CredentialNone}
+	status.APIKey = strings.TrimSpace(os.Getenv("XAI_API_KEY")) != ""
+	store, ok, err := loadXAIStore()
+	if err != nil {
+		return XAILoginStatus{}, err
+	}
+	if ok {
+		status.OAuth.Source = store.kind
+		status.Path = store.path
+		needsRefresh := store.access == "" || xaiAccessNeedsRefresh(store.access)
+		if needsRefresh && store.refresh == "" {
+			status.OAuth.Expired = true
+		} else if store.access != "" && needsRefresh {
+			status.TokenExpiring = true
+		}
+	}
+	switch {
+	case status.APIKey:
+		status.Active = CredentialAPIKey
+	case ok && !status.OAuth.Expired:
+		status.Active = CredentialOAuth
+	}
+	return status, nil
 }
 
 // XAIAuthSecrets returns access and refresh token values from known stores
