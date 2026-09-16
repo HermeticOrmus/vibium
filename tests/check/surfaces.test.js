@@ -18,7 +18,7 @@ test('Check SDK and MCP surfaces share the native runtime', { timeout: 300000 },
     try {
       let raw = ''; for await (const data of req) raw += data;
       const body = JSON.parse(raw);
-      const archived = body.tools.every(t => t.function.name.startsWith('trace_'));
+      const archived = !body.tools.some(t => t.function.name.startsWith('browser_'));
       const obs = body.messages.filter(m => m.role === 'tool');
       let message, step;
       if (archived) {

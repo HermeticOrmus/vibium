@@ -68,7 +68,7 @@ async function fixture() {
       if (d.family === 'google') assert.equal(req.headers['x-goog-api-key'], 'native-key');
       if (d.model === 'error-model') { res.writeHead(401); return res.end('{"error":{"message":"SECRET-ERROR-BODY"}}'); }
       if (d.tools[0] === 'verifier_ping') return answer(res, d.family, d.ping.length ? null : ['verifier_ping', {}], d.ping.length ? JSON.parse(d.ping.at(-1)) : null, 0);
-      if (d.tools.every(t => t.startsWith('trace_'))) {
+      if (!d.tools.some(t => t.startsWith('browser_'))) {
         assert.ok(d.model);
         return answer(res, d.family, null, { status: 'inconclusive', summary: 'Archive does not establish the claim.', evidence: [] }, 0);
       }

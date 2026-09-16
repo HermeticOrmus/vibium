@@ -26,7 +26,7 @@ test('Check input reads Vibium and Playwright archives without a browser and wri
       let raw = ''; for await (const chunk of req) raw += chunk;
       const body = JSON.parse(raw);
       const live = body.tools.some(t => t.function.name.startsWith('browser_'));
-      if (!live) assert.ok(body.tools.every(t => t.function.name.startsWith('trace_')), 'Archive tools must be read-only');
+      if (!live) assert.ok(body.tools.every(t => t.function.name.startsWith('trace_') || t.function.name === 'return_verdict'), 'Archive tools must be read-only');
       assert.ok(!raw.includes('fixture-secret'));
       const observations = body.messages.filter(m => m.role === 'tool');
       const claim = body.messages[1].content;
