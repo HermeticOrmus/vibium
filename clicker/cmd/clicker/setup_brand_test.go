@@ -7,7 +7,7 @@ import (
 
 func TestSetupBannerPlainHasMarkWordAndTagline(t *testing.T) {
 	s := setupBanner(false)
-	for _, need := range []string{"vibium", "setup", "Agents make it. We check it.", "█", "▄"} {
+	for _, need := range []string{"vibium", "setup", "Agents make it. We check it.", "▄▄██████████▄▄", "▀██████▀"} {
 		if !strings.Contains(s, need) {
 			t.Fatalf("banner missing %q:\n%s", need, s)
 		}
