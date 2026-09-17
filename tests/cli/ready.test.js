@@ -49,7 +49,7 @@ function answer(res, content, toolCalls) {
     message: { role: 'assistant', content, tool_calls: toolCalls } }] }));
 }
 
-test('ready ai lists missing settings and detects an unsourced env file without reading it', async t => {
+test('ready ai loads empty AI variables from ai.env and still hides the key', async t => {
   const env = environment(t);
   const settings = path.join(env.HOME, '.config', 'vibium', 'ai.env');
   fs.mkdirSync(path.dirname(settings), { recursive: true });
@@ -58,26 +58,23 @@ test('ready ai lists missing settings and detects an unsourced env file without 
   for (const args of [['ready', 'ai'], ['ready', 'ai', '--json']]) {
     const result = await run(env, args);
     assert.equal(result.code, 1);
-    assert.match(result.stdout, /VIBIUM_AI_PROVIDER/);
     assert.match(result.stdout, /VIBIUM_AI_MODEL/);
-    assert.match(result.stdout, /source ~\/\.config\/vibium\/ai\.env/);
-    // Both notes contain that source line, so assert on the branch itself:
-    // the file is present, so readiness must say it found one.
-    assert.match(result.stdout, /Found ~\/\.config\/vibium\/ai\.env/);
+    assert.match(result.stdout, /Loaded ~\/\.config\/vibium\/ai\.env/);
     assert.doesNotMatch(result.stdout, /No AI settings file yet/);
+    assert.doesNotMatch(result.stdout, /does not load it automatically/);
     assert.doesNotMatch(result.stdout + result.stderr, /secret-file-marker/);
     if (args.includes('--json')) {
       const body = JSON.parse(result.stdout);
       assert.equal(body.ok, false);
       assert.equal(body.result.ready, false);
+      const provider = body.result.checks.find(c => c.name === 'VIBIUM_AI_PROVIDER');
+      const model = body.result.checks.find(c => c.name === 'VIBIUM_AI_MODEL');
+      const key = body.result.checks.find(c => c.name === 'OPENAI_API_KEY');
+      assert.equal(provider.status, 'passed');
+      assert.equal(model.status, 'failed');
+      assert.equal(key.status, 'passed');
       assert.equal(body.result.checks.find(c => c.name === 'provider').status, 'skipped');
-      assert.equal(body.result.checks.find(c => c.name === 'credentials').status, 'skipped');
-      assert.equal(body.result.checks.find(c => c.name === 'VIBIUM_AI_BASE_URL').status, 'skipped');
-      assert.equal(body.result.checks.find(c => c.name === 'VIBIUM_AI_REASONING_EFFORT').status, 'skipped');
-      assert.match(body.result.summary, /rerun vibium ready ai\./);
     }
-    assert.doesNotMatch(result.stdout, /\[PASSED\]|OPENAI_API_KEY/);
-    assert.match(result.stdout, /rerun vibium ready ai\./);
     noBrowser(env);
   }
   assert.deepEqual(fs.readFileSync(settings), before);

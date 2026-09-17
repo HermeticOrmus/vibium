@@ -82,11 +82,9 @@ provider with `--provider`. Changing provider requires an explicit model and
 clears inherited endpoint/effort defaults. A conflicting provider argument
 and flag is an error. No per-call option changes later defaults.
 
-Vibium does not load env files automatically. Source exported assignments in
-the same shell that runs readiness. If `~/.config/vibium/ai.env` exists
-and AI is missing or invalid, readiness explains how to load it without reading
-the file; if no settings file exists yet, it points at `vibium config init`,
-which writes one. Credentials and raw provider error bodies are not displayed.
+Vibium loads `~/.config/vibium/ai.env` for empty AI variables. Nonempty process
+environment still wins. If the file is missing, readiness points at
+`vibium config init`. Credentials and raw provider error bodies are not displayed.
 
 `ready ai` works with no browser installed and ignores browser settings.
 Use it before [checking an archive](../tutorials/check-from-a-recording.md).

@@ -1,0 +1,149 @@
+// Package envfile loads ~/.config/vibium/ai.env into empty process variables.
+// It is not a shell: command substitution is ignored, and nonempty environment
+// values still win.
+package envfile
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"unicode"
+
+	"github.com/vibium/clicker/internal/paths"
+)
+
+const DisableVar = "VIBIUM_LOAD_AI_ENV"
+
+var allowed = map[string]bool{
+	"VIBIUM_AI_PROVIDER":         true,
+	"VIBIUM_AI_MODEL":            true,
+	"VIBIUM_AI_BASE_URL":         true,
+	"VIBIUM_AI_REASONING_EFFORT": true,
+	"OPENAI_API_KEY":             true,
+	"ANTHROPIC_API_KEY":          true,
+	"GOOGLE_API_KEY":             true,
+	"GEMINI_API_KEY":             true,
+	"XAI_API_KEY":                true,
+}
+
+// LoadAIEnv applies unset AI settings from the config-dir ai.env file.
+// Missing file is a no-op. Nonempty process values are left alone.
+func LoadAIEnv() error {
+	if aiEnvDisabled() {
+		return nil
+	}
+	dir, err := paths.GetConfigDir()
+	if err != nil {
+		return nil
+	}
+	path := filepath.Join(dir, "ai.env")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	home, _ := os.UserHomeDir()
+	vars := Parse(string(raw), home)
+	for name, value := range vars {
+		if strings.TrimSpace(os.Getenv(name)) != "" {
+			continue
+		}
+		if err := os.Setenv(name, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Disabled reports whether auto-load is opted out via VIBIUM_LOAD_AI_ENV.
+func Disabled() bool {
+	return aiEnvDisabled()
+}
+
+func aiEnvDisabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(DisableVar))) {
+	case "0", "false", "no", "off":
+		return true
+	default:
+		return false
+	}
+}
+
+// Parse returns allowed assignments. Invalid or unsafe lines are skipped.
+func Parse(content, home string) map[string]string {
+	out := map[string]string{}
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "export ") {
+			line = strings.TrimSpace(line[len("export "):])
+		}
+		name, value, ok := splitAssignment(line)
+		if !ok || !allowed[name] {
+			continue
+		}
+		if unsafeValue(value) {
+			continue
+		}
+		value = unquote(value)
+		if unsafeValue(value) {
+			continue
+		}
+		out[name] = expandHome(value, home)
+	}
+	return out
+}
+
+func splitAssignment(line string) (name, value string, ok bool) {
+	eq := strings.IndexByte(line, '=')
+	if eq <= 0 {
+		return "", "", false
+	}
+	name = strings.TrimSpace(line[:eq])
+	value = strings.TrimSpace(line[eq+1:])
+	if name == "" || !isEnvName(name) {
+		return "", "", false
+	}
+	return name, value, true
+}
+
+func isEnvName(name string) bool {
+	for i, r := range name {
+		if i == 0 && !unicode.IsLetter(r) && r != '_' {
+			return false
+		}
+		if i > 0 && !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' {
+			return false
+		}
+	}
+	return true
+}
+
+func unsafeValue(value string) bool {
+	return strings.Contains(value, "$(") || strings.Contains(value, "`")
+}
+
+func unquote(value string) string {
+	if len(value) >= 2 {
+		if value[0] == '"' && value[len(value)-1] == '"' {
+			return strings.ReplaceAll(value[1:len(value)-1], `\"`, `"`)
+		}
+		if value[0] == '\'' && value[len(value)-1] == '\'' {
+			return value[1 : len(value)-1]
+		}
+	}
+	return value
+}
+
+func expandHome(value, home string) string {
+	if home == "" {
+		return value
+	}
+	value = strings.ReplaceAll(value, "${HOME}", home)
+	return strings.ReplaceAll(value, "$HOME", home)
+}

@@ -86,13 +86,10 @@ the screenshot tool.
 Configuration is read by each CLI invocation, so changing it does not require
 restarting the daemon or browser.
 
-Vibium does not load environment files automatically. To use a file with Bash
-or Zsh, put `export NAME=value` assignments in it, then source it in the same
-shell invocation as the CLI command. `vibium config init` writes the file if
-you do not have one:
+Vibium loads `~/.config/vibium/ai.env` for empty AI variables. `vibium config init`
+writes the file if you do not have one:
 
 ```bash
-source ~/.config/vibium/ai.env
 vibium check "the cart contains one battery pack"
 ```
 
