@@ -156,9 +156,14 @@ func readyEnvNote() []string {
 	// statted a literal tilde, so the file was never found.
 	shown := tildePath(path)
 
-	if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
+	// Lstat, not Stat: the loader refuses symlinks, so a symlinked file must
+	// report as found-but-skipped rather than loaded.
+	if _, err := os.Lstat(path); err == nil {
 		if envfile.Disabled() {
 			return []string{"Found " + shown + "; VIBIUM_LOAD_AI_ENV disabled it. Use export NAME=value assignments and source " + shown + " in the same shell, then rerun readiness."}
+		}
+		if ok, reason := envfile.Eligible(path); !ok {
+			return []string{"Found " + shown + " but did not load it: " + reason + ". Make it a regular file readable only by you: chmod 600 " + shown + "."}
 		}
 		return []string{"Loaded " + shown + " for empty AI variables. Nonempty process environment still wins."}
 	}

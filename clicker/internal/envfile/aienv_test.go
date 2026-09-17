@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -106,5 +107,45 @@ func TestLoadAIEnvMissingFile(t *testing.T) {
 	t.Setenv("VIBIUM_LOAD_AI_ENV", "")
 	if err := LoadAIEnv(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Eligible must agree with LoadAIEnv so readiness never reports a skipped
+// file as loaded.
+func TestEligibleMatchesLoaderRules(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ai.env")
+
+	if ok, reason := Eligible(path); ok || reason != "" {
+		t.Fatalf("missing file: ok=%v reason=%q", ok, reason)
+	}
+
+	if err := os.WriteFile(path, []byte("export VIBIUM_AI_MODEL=m\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if ok, reason := Eligible(path); !ok || reason != "" {
+		t.Fatalf("owner-only file: ok=%v reason=%q", ok, reason)
+	}
+
+	if runtime.GOOS == "windows" {
+		t.Skip("unix modes")
+	}
+	if err := os.Chmod(path, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if ok, reason := Eligible(path); ok || !strings.Contains(reason, "0644") {
+		t.Fatalf("world-readable file: ok=%v reason=%q", ok, reason)
+	}
+
+	link := filepath.Join(dir, "link.env")
+	target := filepath.Join(dir, "target.env")
+	if err := os.WriteFile(target, []byte("export VIBIUM_AI_MODEL=m\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if ok, reason := Eligible(link); ok || !strings.Contains(reason, "not a regular file") {
+		t.Fatalf("symlink: ok=%v reason=%q", ok, reason)
 	}
 }

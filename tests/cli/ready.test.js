@@ -80,6 +80,21 @@ test('ready ai loads empty AI variables from ai.env and still hides the key', as
   assert.deepEqual(fs.readFileSync(settings), before);
 });
 
+test('ready ai names the skipped ai.env instead of claiming it loaded', { skip: process.platform === 'win32' }, async t => {
+  const env = environment(t);
+  const settings = path.join(env.HOME, '.config', 'vibium', 'ai.env');
+  fs.mkdirSync(path.dirname(settings), { recursive: true });
+  fs.writeFileSync(settings, 'OPENAI_API_KEY=secret-file-marker\nVIBIUM_AI_PROVIDER=openai\n', { mode: 0o644 });
+  const result = await run(env, ['ready', 'ai']);
+  assert.equal(result.code, 1);
+  assert.match(result.stdout, /Found ~\/\.config\/vibium\/ai\.env but did not load it/);
+  assert.match(result.stdout, /0644/);
+  assert.match(result.stdout, /chmod 600/);
+  assert.doesNotMatch(result.stdout, /Loaded ~\/\.config\/vibium\/ai\.env/);
+  assert.doesNotMatch(result.stdout + result.stderr, /secret-file-marker/);
+  noBrowser(env);
+});
+
 test('ready ai exercises the actual provider transport and reports readiness in text and JSON', async t => {
   const fixture = await provider(t, (req, res, body, requests) => {
     assert.equal(req.url, '/v1/chat/completions');

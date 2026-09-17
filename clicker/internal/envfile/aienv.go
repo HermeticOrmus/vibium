@@ -46,7 +46,7 @@ func LoadAIEnv() error {
 		}
 		return fmt.Errorf("stat %s: %w", path, err)
 	}
-	if !info.Mode().IsRegular() || !ownerOnly(info.Mode()) {
+	if ok, _ := eligibleMode(info.Mode()); !ok {
 		return nil
 	}
 	raw, err := os.ReadFile(path)
@@ -68,6 +68,28 @@ func LoadAIEnv() error {
 // Disabled reports whether auto-load is opted out via VIBIUM_LOAD_AI_ENV.
 func Disabled() bool {
 	return aiEnvDisabled()
+}
+
+// Eligible reports whether LoadAIEnv reads the file at path. When it does
+// not, reason says why as a sentence fragment. A missing or unstattable
+// file is ineligible with an empty reason; readiness has its own message
+// for that case.
+func Eligible(path string) (ok bool, reason string) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false, ""
+	}
+	return eligibleMode(info.Mode())
+}
+
+func eligibleMode(mode os.FileMode) (ok bool, reason string) {
+	if !mode.IsRegular() {
+		return false, "it is not a regular file"
+	}
+	if !ownerOnly(mode) {
+		return false, fmt.Sprintf("its permissions are %04o, not owner-only", mode.Perm())
+	}
+	return true, ""
 }
 
 func aiEnvDisabled() bool {
