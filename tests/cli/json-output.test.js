@@ -150,7 +150,8 @@ describe('CLI: --json envelope on no-browser commands (#517)', () => {
   });
 
   test('add-skill --json wraps the install location', () => {
-    const result = run(['--json', 'add-skill']);
+    // --agent all pins both installs; the default depends on detected agents.
+    const result = run(['--json', 'add-skill', '--agent', 'all']);
     assert.strictEqual(result.status, 0);
     const env = parseEnvelope(result);
     assert.strictEqual(env.ok, true);

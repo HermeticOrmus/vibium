@@ -12,6 +12,12 @@ func TestSkillInstallation(t *testing.T) {
 	t.Setenv("HOME", homeDir)
 	t.Setenv("USERPROFILE", homeDir)
 	t.Setenv("GROK_HOME", "")
+	// Both agent directories exist, so the auto default installs for both.
+	for _, dir := range []string{".claude", ".grok"} {
+		if err := os.MkdirAll(filepath.Join(homeDir, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, tc := range []struct {
 		name string
 		args []string
@@ -92,6 +98,61 @@ func TestSkillInstallAgentGrokOnly(t *testing.T) {
 	}
 	if _, err := os.ReadFile(filepath.Join(home, ".grok", "skills", "browser", "SKILL.md")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A fresh machine gets only Claude, the pre-flag behavior; add-skill must
+// not create ~/.grok for users who never ran Grok.
+func TestSkillDefaultDoesNotCreateGrokOnFreshHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("GROK_HOME", "")
+	cmd := newSkillCmd()
+	cmd.SetArgs([]string{})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.ReadFile(filepath.Join(home, ".claude", "skills", "browser", "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".grok")); !os.IsNotExist(err) {
+		t.Fatal("default install created ~/.grok on a machine without Grok")
+	}
+}
+
+func TestSkillDetectionCountsGROKHOMEAsGrok(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("GROK_HOME", filepath.Join(home, "grok-root"))
+	cmd := newSkillCmd()
+	cmd.SetArgs([]string{})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.ReadFile(filepath.Join(home, "grok-root", "skills", "browser", "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSkillAgentAllForcesBothOnFreshHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("GROK_HOME", "")
+	cmd := newSkillCmd()
+	cmd.SetArgs([]string{"--agent", "all"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{
+		filepath.Join(home, ".claude", "skills", "browser", "SKILL.md"),
+		filepath.Join(home, ".grok", "skills", "browser", "SKILL.md"),
+	} {
+		if _, err := os.ReadFile(p); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
