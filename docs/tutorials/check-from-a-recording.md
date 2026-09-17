@@ -8,18 +8,15 @@ or ask your coding agent to use the `check` skill.
 
 ## Before you start
 
-Use the same Vibium binary and AI settings as Part 1. In a new terminal,
-load the settings before running the check. If the file does not exist yet,
-`vibium config init` writes it:
+Use the same Vibium binary and AI settings as Part 1. If the file does not
+exist yet, `vibium config init` writes it:
 
 ```bash
-source ~/.config/vibium/ai.env
 vibium ready ai
 ```
 
 Wait for **READY**, then work in the directory containing `sitecheck.zip`.
-If your settings file is elsewhere, source that file instead. No browser
-needs to be open for this tutorial.
+No browser needs to be open for this tutorial.
 
 ## 1. Check the saved run
 

@@ -16,6 +16,7 @@ func TestPerCallConfigResolution(t *testing.T) {
 			t.Setenv(prefix+"REASONING_EFFORT", "high")
 			t.Setenv("OPENAI_API_KEY", "original-key")
 			t.Setenv("ANTHROPIC_API_KEY", "anthropic-key")
+			t.Setenv("XAI_API_KEY", "xai-key")
 			cases := []struct {
 				name                                   string
 				params                                 map[string]interface{}
@@ -26,6 +27,7 @@ func TestPerCallConfigResolution(t *testing.T) {
 				{"same provider", map[string]interface{}{"provider": "openai"}, "openai", "original-model", "https://original.example/v1", "high", "original-key", false},
 				{"model only", map[string]interface{}{"model": "eval-model"}, "openai", "eval-model", "https://original.example/v1", "high", "original-key", false},
 				{"native switch", map[string]interface{}{"provider": "anthropic", "model": "claude"}, "anthropic", "claude", "https://api.anthropic.com/v1", "", "anthropic-key", false},
+				{"xai switch", map[string]interface{}{"provider": "xai", "model": "grok-4"}, "xai", "grok-4", "https://api.x.ai/v1", "", "xai-key", false},
 				{"local switch", map[string]interface{}{"provider": "local", "model": "local-model"}, "local", "local-model", "http://127.0.0.1:8080/v1", "", "original-key", false},
 				{"empty resets", map[string]interface{}{"baseURL": "", "reasoningEffort": ""}, "openai", "original-model", "https://api.openai.com/v1", "", "original-key", false},
 				{name: "switch needs model", params: map[string]interface{}{"provider": "anthropic"}, fails: true},
