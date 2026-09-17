@@ -188,8 +188,9 @@ also tests the selected browser; see [readiness diagnostics](ready.md). Exit 0 a
 the provider tool round-trip passed. It does not test screenshot capability or
 application behavior. Unsupported tool protocols produce errors and setup guidance.
 
-Vibium does not load environment files automatically. Use `export NAME=value`
-assignments in a private file, then source it in the same shell invocation.
+Vibium loads `~/.config/vibium/ai.env` for empty AI variables on each command.
+Nonempty process environment still wins. Command substitution is not expanded.
+Set `VIBIUM_LOAD_AI_ENV=0` to skip.
 
 `vibium config init` writes that file for you at `~/.config/vibium/ai.env`,
 readable only by you, with every setting present and commented:
@@ -197,7 +198,7 @@ readable only by you, with every setting present and commented:
 ```
 $ vibium config init
 Wrote ~/.config/vibium/ai.env (0600) — provider, model and API key for run and check
-Edit it, then: source ~/.config/vibium/ai.env
+Edit it, then run vibium. Empty AI variables are loaded from this file.
 ```
 
 It refuses to overwrite an existing file unless you pass `--force`, which keeps

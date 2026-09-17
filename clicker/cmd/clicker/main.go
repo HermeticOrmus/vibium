@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vibium/clicker/internal/browser"
+	"github.com/vibium/clicker/internal/envfile"
 	"github.com/vibium/clicker/internal/log"
 	"github.com/vibium/clicker/internal/paths"
 )
@@ -168,6 +169,9 @@ func newRootCmd(progName string) (root, run *cobra.Command) {
   # One-word prompts need the explicit run command.`,
 		Short: "Browser automation for AI agents and humans",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if err := envfile.LoadAIEnv(); err != nil {
+				return err
+			}
 			if isReadyCommand(cmd) {
 				return nil
 			}

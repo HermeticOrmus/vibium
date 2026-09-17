@@ -39,8 +39,8 @@ Run [`vibium ready`](docs/reference/ready.md) to check setup.
 
 For a walkthrough, follow [Your coding agent’s first Check](docs/tutorials/check-with-a-coding-agent.md).
 Run and Check currently require the development build and AI configuration:
-run `vibium config init`, fill in the file it writes at `~/.config/vibium/ai.env`,
-then `source` it. See [model providers](docs/reference/model-providers.md).
+run `vibium config init`, fill in the file it writes at `~/.config/vibium/ai.env`.
+See [model providers](docs/reference/model-providers.md).
 
 See [Introducing Run and Check](docs/updates/2026-09-07-run-and-check.md) for examples and limitations.
 
