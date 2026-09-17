@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/vibium/clicker/internal/envfile"
 	"github.com/vibium/clicker/internal/paths"
 	"github.com/vibium/clicker/internal/verifier"
 )
@@ -46,16 +47,16 @@ func newReadyCmd() *cobra.Command {
 	root := &cobra.Command{
 		Annotations: map[string]string{"standalone": "true"},
 		Use:         "ready", Short: "Check browser installation and AI setup",
-		Long:    "Check the selected local browser executable files, then test AI when configured. No browser or driver is launched.\nDoes not install browsers or change existing sessions. Missing AI is optional here; ready ai requires it.\nAI checks make up to two model requests (API charges may apply). Environment files are not loaded automatically.",
+		Long:    "Check the selected local browser executable files, then test AI when configured. No browser or driver is launched.\nDoes not install browsers or change existing sessions. Missing AI is optional here; ready ai requires it.\nAI checks make up to two model requests (API charges may apply). Empty AI variables are loaded from ~/.config/vibium/ai.env unless VIBIUM_LOAD_AI_ENV=0.",
 		Example: "  vibium ready\n  # Checks browser installation and configured AI; reports fixes or READY.\n  vibium ready --json\n  # Structured readiness results; exit 0 when requested checks pass, otherwise 1.",
 		Args:    cobra.NoArgs,
 	}
 	ai := &cobra.Command{
 		Use: "ai [provider]", Short: "Test AI configuration and a provider tool round-trip without a browser",
-		Long:      "Require valid AI configuration and test authentication, model access, tool calling, and a structured response.\nMakes up to two model requests (API charges may apply). Does not launch a browser or load env files.\nChanging provider requires --model; per-call options do not change defaults.",
-		Example:   "  vibium ready ai\n  # Tests the configured provider and model.\n  vibium ready ai anthropic --model your-model\n  # Tests Anthropic with the supplied model and ANTHROPIC_API_KEY.\n  vibium ready ai --json\n  # Prints the provider checks as JSON.",
+		Long:      "Require valid AI configuration and test authentication, model access, tool calling, and a structured response.\nMakes up to two model requests (API charges may apply). Does not launch a browser.\nChanging provider requires --model; per-call options do not change defaults.",
+		Example:   "  vibium ready ai\n  # Tests the configured provider and model.\n  vibium ready ai anthropic --model your-model\n  # Tests Anthropic with the supplied model and ANTHROPIC_API_KEY.\n  vibium ready ai xai --model grok-4\n  # Tests xAI with the supplied model and XAI_API_KEY.\n  vibium ready ai --json\n  # Prints the provider checks as JSON.",
 		Args:      cobra.MaximumNArgs(1),
-		ValidArgs: []string{"openai", "anthropic", "google", "openai-compatible", "local"},
+		ValidArgs: []string{"openai", "xai", "anthropic", "google", "openai-compatible", "local"},
 	}
 	browserCmd := &cobra.Command{
 		Use: "browser [engine]", Short: "Check installed browser executable files without launching them",
@@ -155,12 +156,18 @@ func readyEnvNote() []string {
 	// statted a literal tilde, so the file was never found.
 	shown := tildePath(path)
 
-	if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
-		return []string{"Found " + shown + "; Vibium does not load it automatically. Use export NAME=value assignments in that file. In Bash/Zsh, run: source " + shown + "; then rerun readiness in the same shell."}
+	// Lstat, not Stat: the loader refuses symlinks, so a symlinked file must
+	// report as found-but-skipped rather than loaded.
+	if _, err := os.Lstat(path); err == nil {
+		if envfile.Disabled() {
+			return []string{"Found " + shown + "; VIBIUM_LOAD_AI_ENV disabled it. Use export NAME=value assignments and source " + shown + " in the same shell, then rerun readiness."}
+		}
+		if ok, reason := envfile.Eligible(path); !ok {
+			return []string{"Found " + shown + " but did not load it: " + reason + ". Make it a regular file readable only by you: chmod 600 " + shown + "."}
+		}
+		return []string{"Loaded " + shown + " for empty AI variables. Nonempty process environment still wins."}
 	}
-	// No settings file yet: name the command that writes one, rather than
-	// leaving the reader to hand-roll a file the tutorial describes in prose.
-	return []string{"No AI settings file yet. Run: vibium config init; edit " + shown + "; then, in Bash/Zsh: source " + shown + " in the shell that runs vibium."}
+	return []string{"No AI settings file yet. Run: vibium config init; edit " + shown + "."}
 }
 
 func writeReadiness(cmd *cobra.Command, result setupResult) {

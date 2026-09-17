@@ -51,7 +51,8 @@ On a terminal, setup always prompts for AI in this run.
 --non-interactive skips prompts only when stdin is not a TTY (CI, agents).
 --quick fills only what is missing.
 After the selected sections, setup runs the matching vibium ready checks.
-This process uses the AI values immediately. New shells still source ai.env.`,
+This process uses the AI values immediately; later commands load empty AI
+variables from ai.env automatically.`,
 		Example: `  vibium setup
   # Browser, AI, skills, then readiness. Prompts for AI on a terminal.
 

@@ -12,7 +12,7 @@ func checkVerifierSetup(ctx context.Context, config verifier.Config, probe func(
 	prefix := config.Prefix()
 	result := setupResult{Ready: true, Notes: []string{"AI readiness does not test browser access, screenshot support, or application behavior."}}
 	fixes := map[string]string{
-		prefix + "PROVIDER":         "Export " + prefix + "PROVIDER as openai, anthropic, google, openai-compatible, or local.",
+		prefix + "PROVIDER":         "Export " + prefix + "PROVIDER as openai, xai, anthropic, google, openai-compatible, or local.",
 		prefix + "MODEL":            "Set a tool-capable model with --model or export " + prefix + "MODEL. When changing provider, supply --model explicitly.",
 		config.CredentialVariable(): "Export " + config.CredentialVariable() + " in the shell running the command; keep its value out of chat and logs.",
 		prefix + "BASE_URL":         "Export " + prefix + "BASE_URL as the server's API base URL, such as http://localhost:1234/v1.",

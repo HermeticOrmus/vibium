@@ -39,9 +39,9 @@ not echoed. openai-compatible and local also prompt for a base URL.
 
 It writes `~/.config/vibium/ai.env` at mode 0600. If that file already exists,
 the previous copy is kept as `ai.env.bak`. The setup process uses those values
-immediately so the following `ready` check in the same run sees them. New
-shells still `source ~/.config/vibium/ai.env` until a build that loads the
-file at start.
+immediately so the following `ready` check in the same run sees them. Later
+commands load empty AI variables from that file automatically; see
+[model providers](../reference/model-providers.md).
 
 On a terminal, setup prompts for those values immediately. `--non-interactive`
 skips prompts only when stdin is not a TTY, and does not overwrite an existing
