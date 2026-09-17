@@ -242,6 +242,7 @@ func newRootCmd(progName string) (root, run *cobra.Command) {
 	rootCmd.AddCommand(newA11yTreeCmd())
 	rootCmd.AddCommand(newSleepCmd())
 	rootCmd.AddCommand(newSkillCmd())
+	rootCmd.AddCommand(newSetupCmd())
 	rootCmd.AddCommand(newConfigCmd())
 	rootCmd.AddCommand(newMapCmd())
 	rootCmd.AddCommand(newDiffCmd())

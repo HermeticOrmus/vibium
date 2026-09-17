@@ -22,11 +22,14 @@ Vibium gives AI agents the tools they need to check their work. Install the `bro
 
 ```bash
 npm install -g vibium
-npx skills add https://github.com/VibiumDev/vibium
+vibium setup
 ```
 
+Agents can run `vibium setup --non-interactive`. Optional: install skills with
+`npx skills add https://github.com/VibiumDev/vibium`.
+
 Select all Vibium skills in the installer, then choose your agent and installation
-scope. Vibium installs Chrome automatically.
+scope. `vibium setup` installs Chrome when it is missing.
 
 - **browser** — explore pages, automate actions, record sessions, and carry out browser tasks from plain-language instructions.
 - **check** — independently assess whether a claim holds in the browser or a recording.
@@ -35,12 +38,13 @@ Invoke `/browser` or `/check` in agents with slash skills, or `$browser` and
 `$check` in Codex. Setup guides: [Codex](docs/how-to-guides/using-vibium-with-codex.md),
 [Claude Code](docs/how-to-guides/using-vibium-with-claude-code.md), and
 [Claude Desktop Chat via MCP](docs/how-to-guides/using-vibium-with-claude-desktop.md).
+[Set up Vibium](docs/how-to-guides/setup.md) is the happy path.
 Run [`vibium ready`](docs/reference/ready.md) to check setup.
 
 For a walkthrough, follow [Your coding agent’s first Check](docs/tutorials/check-with-a-coding-agent.md).
 Run and Check currently require the development build and AI configuration:
-run `vibium config init`, fill in the file it writes at `~/.config/vibium/ai.env`.
-See [model providers](docs/reference/model-providers.md).
+`vibium setup` writes `~/.config/vibium/ai.env` (or `vibium config init` for the
+template). See [model providers](docs/reference/model-providers.md).
 
 See [Introducing Run and Check](docs/updates/2026-09-07-run-and-check.md) for examples and limitations.
 

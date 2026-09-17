@@ -14,7 +14,7 @@ func checkVerifierSetup(ctx context.Context, config verifier.Config, probe func(
 	fixes := map[string]string{
 		prefix + "PROVIDER":         "Export " + prefix + "PROVIDER as openai, xai, anthropic, google, openai-compatible, or local.",
 		prefix + "MODEL":            "Set a tool-capable model with --model or export " + prefix + "MODEL. When changing provider, supply --model explicitly.",
-		config.CredentialVariable(): "Export " + config.CredentialVariable() + " in the shell running the command; keep its value out of chat and logs.",
+		config.CredentialVariable(): "Set " + config.CredentialVariable() + " in ~/.config/vibium/ai.env (loaded automatically) or export it; keep its value out of chat and logs.",
 		prefix + "BASE_URL":         "Export " + prefix + "BASE_URL as the server's API base URL, such as http://localhost:1234/v1.",
 		prefix + "REASONING_EFFORT": "Unset " + prefix + "REASONING_EFFORT for Anthropic/Google, or choose an effort supported by your OpenAI-compatible model.",
 	}
