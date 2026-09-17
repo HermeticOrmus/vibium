@@ -73,6 +73,9 @@ test('setup without an API key ends on the next step, not a failure', async t =>
   const cred = body.result.ready.checks.find(c => c.name === 'OPENAI_API_KEY');
   assert.equal(cred.status, 'skipped');
   assert.match(cred.message, /add it to .*ai\.env/);
+  const provider = body.result.ready.checks.find(c => c.name === 'provider');
+  assert.equal(provider.status, 'skipped');
+  assert.match(provider.message, /No API key; provider was not contacted/);
   assert.equal(body.result.ready.checks.filter(c => c.status === 'failed').length, 0);
   assert.match(body.result.ready.summary, /Add your API key to .*ai\.env, then run vibium ready ai/);
 });

@@ -397,10 +397,6 @@ func runSetupReadiness(cmd *cobra.Command, scope string) setupResult {
 		}
 		cred := config.CredentialVariable()
 		for i, c := range result.Checks {
-			if c.Name == "provider" && c.Status == "passed" {
-				result.Checks[i].Status = "skipped"
-				result.Checks[i].Message = "No API key; provider was not contacted."
-			}
 			if c.Name == cred && c.Status == "failed" {
 				result.Checks[i].Status = "skipped"
 				result.Checks[i].Message = "No API key yet; add it to " + shown + "."
@@ -413,8 +409,19 @@ func runSetupReadiness(cmd *cobra.Command, scope string) setupResult {
 				failed++
 			}
 		}
-		if !result.Ready && failed == 0 {
-			result.Summary = "Add your API key to " + shown + ", then run vibium ready ai."
+		// With the key as the only gap, the probe was skipped because of
+		// the key, not a broken configuration; say so. Real configuration
+		// failures keep the stock message.
+		if failed == 0 {
+			for i, c := range result.Checks {
+				if c.Name == "provider" {
+					result.Checks[i].Status = "skipped"
+					result.Checks[i].Message = "No API key; provider was not contacted."
+				}
+			}
+			if !result.Ready {
+				result.Summary = "Add your API key to " + shown + ", then run vibium ready ai."
+			}
 		}
 	}
 	return result
