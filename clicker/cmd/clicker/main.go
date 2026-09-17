@@ -86,9 +86,6 @@ func defaultEngine() string {
 // as unset, so without the second pass --session and --channel are accepted
 // and silently ignored (#482).
 func applyGlobalFlags(cmd *cobra.Command) error {
-	if err := envfile.LoadAIEnv(); err != nil {
-		return err
-	}
 	headlessSet = cmd.Flags().Changed("headless")
 	engineSet = cmd.Flags().Changed("engine") || os.Getenv("VIBIUM_ENGINE") != ""
 	channelSet = cmd.Flags().Changed("channel") || os.Getenv("VIBIUM_ENGINE_CHANNEL") != ""

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"unicode"
 
@@ -38,15 +39,21 @@ func LoadAIEnv() error {
 		return nil
 	}
 	path := filepath.Join(dir, "ai.env")
-	raw, err := os.ReadFile(path)
+	info, err := os.Lstat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
+		return fmt.Errorf("stat %s: %w", path, err)
+	}
+	if !info.Mode().IsRegular() || !ownerOnly(info.Mode()) {
+		return nil
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
 	}
-	home, _ := os.UserHomeDir()
-	vars := Parse(string(raw), home)
+	vars := Parse(string(raw))
 	for name, value := range vars {
 		if strings.TrimSpace(os.Getenv(name)) != "" {
 			continue
@@ -73,7 +80,8 @@ func aiEnvDisabled() bool {
 }
 
 // Parse returns allowed assignments. Invalid or unsafe lines are skipped.
-func Parse(content, home string) map[string]string {
+// Values are literals: no $HOME or command substitution.
+func Parse(content string) map[string]string {
 	out := map[string]string{}
 	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
@@ -94,9 +102,16 @@ func Parse(content, home string) map[string]string {
 		if unsafeValue(value) {
 			continue
 		}
-		out[name] = expandHome(value, home)
+		out[name] = value
 	}
 	return out
+}
+
+func ownerOnly(mode os.FileMode) bool {
+	if runtime.GOOS == "windows" {
+		return true
+	}
+	return mode.Perm()&0o077 == 0
 }
 
 func splitAssignment(line string) (name, value string, ok bool) {
@@ -138,12 +153,4 @@ func unquote(value string) string {
 		}
 	}
 	return value
-}
-
-func expandHome(value, home string) string {
-	if home == "" {
-		return value
-	}
-	value = strings.ReplaceAll(value, "${HOME}", home)
-	return strings.ReplaceAll(value, "$HOME", home)
 }

@@ -3,6 +3,7 @@ package envfile
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -13,7 +14,7 @@ export VIBIUM_AI_PROVIDER=openai
 VIBIUM_AI_MODEL="gpt-test"
 export OPENAI_API_KEY='sk-test'
 PATH=/tmp
-`, "/home/u")
+`)
 	if got["VIBIUM_AI_PROVIDER"] != "openai" || got["VIBIUM_AI_MODEL"] != "gpt-test" || got["OPENAI_API_KEY"] != "sk-test" {
 		t.Fatalf("%v", got)
 	}
@@ -23,7 +24,7 @@ PATH=/tmp
 }
 
 func TestParseSkipsCommandSubstitution(t *testing.T) {
-	got := Parse("export OPENAI_API_KEY=$(cat /secret)\nexport ANTHROPIC_API_KEY=`cat /secret`\nexport GOOGLE_API_KEY=plain\n", "")
+	got := Parse("export OPENAI_API_KEY=$(cat /secret)\nexport ANTHROPIC_API_KEY=`cat /secret`\nexport GOOGLE_API_KEY=plain\n")
 	if _, ok := got["OPENAI_API_KEY"]; ok {
 		t.Fatal("expanded $(")
 	}
@@ -35,10 +36,30 @@ func TestParseSkipsCommandSubstitution(t *testing.T) {
 	}
 }
 
-func TestParseExpandsHome(t *testing.T) {
-	got := Parse("export VIBIUM_AI_BASE_URL=$HOME/v1\nexport VIBIUM_AI_MODEL=${HOME}/m\n", "/tmp/home")
-	if got["VIBIUM_AI_BASE_URL"] != "/tmp/home/v1" || got["VIBIUM_AI_MODEL"] != "/tmp/home/m" {
+func TestParseKeepsHomeLiteral(t *testing.T) {
+	got := Parse("export VIBIUM_AI_BASE_URL=$HOME/v1\nexport VIBIUM_AI_MODEL=${HOME}/m\n")
+	if got["VIBIUM_AI_BASE_URL"] != "$HOME/v1" || got["VIBIUM_AI_MODEL"] != "${HOME}/m" {
 		t.Fatalf("%v", got)
+	}
+}
+
+func TestLoadAIEnvSkipsWorldReadable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix modes")
+	}
+	dir := t.TempDir()
+	t.Setenv("VIBIUM_CONFIG_DIR", dir)
+	t.Setenv("VIBIUM_LOAD_AI_ENV", "")
+	t.Setenv("VIBIUM_AI_MODEL", "")
+	path := filepath.Join(dir, "ai.env")
+	if err := os.WriteFile(path, []byte("export VIBIUM_AI_MODEL=from-file\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := LoadAIEnv(); err != nil {
+		t.Fatal(err)
+	}
+	if os.Getenv("VIBIUM_AI_MODEL") != "" {
+		t.Fatal("loaded world-readable ai.env")
 	}
 }
 
