@@ -77,8 +77,9 @@ Include any endpoint or reasoning-effort settings your model requires.
 Keep real credentials in this private local configuration, not in chat or
 project files. Restart Claude Desktop after changing it.
 
-Vibium does not load `ai.env` automatically. Sourcing it in a separate terminal
-does not update an already-running Desktop app or its MCP server.
+The MCP process loads `~/.config/vibium/ai.env` at start when that file is
+mode 0600. Changing the file does not update an already-running Desktop app
+or its MCP server; restart Claude Desktop after edits.
 
 Then ask:
 

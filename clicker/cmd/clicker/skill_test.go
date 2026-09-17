@@ -68,3 +68,45 @@ func TestDefaultSkillIsBrowser(t *testing.T) {
 		t.Fatal("default skill changed")
 	}
 }
+
+func TestSkillInstallsForClaudeAndGrok(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	for _, tc := range []struct {
+		agent string
+		args  []string
+		rel   []string
+	}{
+		{"claude", nil, []string{".claude", "skills", "browser"}},
+		{"claude", []string{"--agent", "claude"}, []string{".claude", "skills", "browser"}},
+		{"grok", []string{"--agent", "grok"}, []string{".grok", "skills", "browser"}},
+		{"grok", []string{"check", "--agent", "grok"}, []string{".grok", "skills", "check"}},
+	} {
+		cmd := newSkillCmd()
+		cmd.SetArgs(append([]string{}, tc.args...))
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("%s %v: %v", tc.agent, tc.args, err)
+		}
+		home, _ := os.UserHomeDir()
+		path := filepath.Join(append([]string{home}, tc.rel...)...)
+		if _, err := os.Stat(filepath.Join(path, "SKILL.md")); err != nil {
+			t.Fatalf("%s %v: %v", tc.agent, tc.args, err)
+		}
+	}
+}
+
+func TestSkillRejectsUnknownAgent(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	cmd := newSkillCmd()
+	cmd.SetArgs([]string{"--agent", "unknown"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("accepted unknown agent")
+	}
+	if !bytes.Contains([]byte(err.Error()), []byte("unknown agent")) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

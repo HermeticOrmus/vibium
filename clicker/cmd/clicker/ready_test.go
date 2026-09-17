@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -98,5 +100,103 @@ func TestReadyProviderSelectionDoesNotMutateDefaults(t *testing.T) {
 	})
 	if !result.Ready || os.Getenv("VIBIUM_AI_PROVIDER") != "google" || os.Getenv("VIBIUM_AI_MODEL") != "old-model" {
 		t.Fatal("override mutated defaults")
+	}
+}
+
+func hasReadyNote(notes []string, substr string) bool {
+	for _, note := range notes {
+		if strings.Contains(note, substr) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestReadyDisplayNoteWhenEmpty(t *testing.T) {
+	cmd := readyTestCommand(t, "all")
+	t.Setenv("DISPLAY", "")
+	t.Setenv("WAYLAND_DISPLAY", "")
+	result := runReadiness(cmd, nil, func(context.Context, verifier.Config) error {
+		t.Fatal("unconfigured AI was contacted")
+		return nil
+	})
+	if !result.Ready {
+		t.Fatalf("empty DISPLAY must not fail readiness: %+v", result)
+	}
+	if runtime.GOOS == "linux" && !hasReadyNote(result.Notes, "--headless") {
+		t.Fatalf("missing DISPLAY note: %+v", result.Notes)
+	}
+	if runtime.GOOS != "linux" && hasReadyNote(result.Notes, "--headless") {
+		t.Fatalf("DISPLAY note outside linux: %+v", result.Notes)
+	}
+}
+
+func TestReadyDisplayNoteAbsentWhenSet(t *testing.T) {
+	cmd := readyTestCommand(t, "all")
+	t.Setenv("DISPLAY", ":0")
+	t.Setenv("WAYLAND_DISPLAY", "")
+	result := runReadiness(cmd, nil, func(context.Context, verifier.Config) error {
+		t.Fatal("unconfigured AI was contacted")
+		return nil
+	})
+	if hasReadyNote(result.Notes, "--headless") {
+		t.Fatalf("DISPLAY note with DISPLAY set: %+v", result.Notes)
+	}
+}
+
+func TestReadyDisplayNoteAbsentWhenWayland(t *testing.T) {
+	cmd := readyTestCommand(t, "all")
+	t.Setenv("DISPLAY", "")
+	t.Setenv("WAYLAND_DISPLAY", "wayland-1")
+	result := runReadiness(cmd, nil, func(context.Context, verifier.Config) error {
+		t.Fatal("unconfigured AI was contacted")
+		return nil
+	})
+	if hasReadyNote(result.Notes, "--headless") {
+		t.Fatalf("DISPLAY note with WAYLAND_DISPLAY set: %+v", result.Notes)
+	}
+}
+
+func TestReadyDisplayNoteSkippedForAIScope(t *testing.T) {
+	cmd := readyTestCommand(t, "ai")
+	t.Setenv("DISPLAY", "")
+	t.Setenv("WAYLAND_DISPLAY", "")
+	result := runReadiness(cmd, nil, func(context.Context, verifier.Config) error {
+		t.Fatal("unconfigured AI was contacted")
+		return nil
+	})
+	if hasReadyNote(result.Notes, "--headless") {
+		t.Fatal("DISPLAY note leaked into ready ai")
+	}
+}
+
+func TestNodeShimNoteFromComm(t *testing.T) {
+	if nodeShimNoteFromComm("node") == "" {
+		t.Fatal("node parent should note the JS shim")
+	}
+	if nodeShimNoteFromComm("nodejs") == "" {
+		t.Fatal("nodejs parent should note the JS shim")
+	}
+	if nodeShimNoteFromComm("bash") != "" {
+		t.Fatal("bash parent should not note the JS shim")
+	}
+}
+
+func TestNodeShimCmdline(t *testing.T) {
+	if !nodeShimCmdline([]string{"/usr/bin/node", "/usr/lib/node_modules/vibium/bin/cli.js", "ready"}) {
+		t.Fatal("cli.js argv should count as the npm shim")
+	}
+	if nodeShimCmdline([]string{"/usr/bin/node", "--test", "tests/cli/ready.test.js"}) {
+		t.Fatal("node --test must not count as the npm shim")
+	}
+	script := filepath.Join(t.TempDir(), "vibium")
+	if err := os.WriteFile(script, []byte("#!/usr/bin/env node\nconsole.log(1)\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if !nodeShimCmdline([]string{"/usr/bin/node", script, "ready"}) {
+		t.Fatal("shebang node script should count as the npm shim")
+	}
+	if nodeShimCmdline([]string{"/usr/bin/node", filepath.Join(t.TempDir(), "ready.test.js")}) {
+		t.Fatal("an unrelated .js file must not count as the npm shim")
 	}
 }

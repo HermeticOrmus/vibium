@@ -21,9 +21,8 @@ vibium ready
 ```
 
 Wait for READY. For Anthropic, Google, or a local server, see
-[model providers](../reference/model-providers.md). Settings files are not
-loaded automatically; source a file containing exported assignments in the
-same shell that runs Vibium.
+[model providers](../reference/model-providers.md). Vibium loads
+`~/.config/vibium/ai.env` at start when the file is mode 0600.
 
 For one run, use `--provider`, `--model`, `--base-url`, and `--reasoning-effort`
 instead of changing environment defaults. These options also work with

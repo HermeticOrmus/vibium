@@ -52,11 +52,9 @@ steps, or vibium run to delegate a browser goal.
 Use the check skill when an independent assessment of an acceptance claim is
 needed. Run's completed result does not replace a Check verdict.
 
-If you have not configured AI yet, run `vibium config init`, fill in the file
-it writes at `~/.config/vibium/ai.env`, and keep `export` on each line.
-
-Before Run, Check, or AI readiness, source ~/.config/vibium/ai.env in the
-same shell invocation. Do not display the settings file or log credentials.
+If you have not configured AI yet, run `vibium setup` (or `vibium config init`
+and fill in `~/.config/vibium/ai.env`). Vibium loads that file at start when
+it is mode 0600. Do not display the settings file or log credentials.
 Keep the same Vibium session throughout a browser workflow and its check.
 ```
 

@@ -7,10 +7,12 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/vibium/clicker/internal/envfile"
 	"github.com/vibium/clicker/internal/paths"
 	"github.com/vibium/clicker/internal/verifier"
 )
@@ -46,13 +48,13 @@ func newReadyCmd() *cobra.Command {
 	root := &cobra.Command{
 		Annotations: map[string]string{"standalone": "true"},
 		Use:         "ready", Short: "Check browser installation and AI setup",
-		Long:    "Check the selected local browser executable files, then test AI when configured. No browser or driver is launched.\nDoes not install browsers or change existing sessions. Missing AI is optional here; ready ai requires it.\nAI checks make up to two model requests (API charges may apply). Environment files are not loaded automatically.",
+		Long:    "Check the selected local browser executable files, then test AI when configured. No browser or driver is launched.\nDoes not install browsers or change existing sessions. Missing AI is optional here; ready ai requires it.\nAI checks make up to two model requests (API charges may apply). Loads ~/.config/vibium/ai.env at start when that file is mode 0600.",
 		Example: "  vibium ready\n  # Checks browser installation and configured AI; reports fixes or READY.\n  vibium ready --json\n  # Structured readiness results; exit 0 when requested checks pass, otherwise 1.",
 		Args:    cobra.NoArgs,
 	}
 	ai := &cobra.Command{
 		Use: "ai [provider]", Short: "Test AI configuration and a provider tool round-trip without a browser",
-		Long:      "Require valid AI configuration and test authentication, model access, tool calling, and a structured response.\nMakes up to two model requests (API charges may apply). Does not launch a browser or load env files.\nChanging provider requires --model; per-call options do not change defaults.",
+		Long:      "Require valid AI configuration and test authentication, model access, tool calling, and a structured response.\nMakes up to two model requests (API charges may apply). Does not launch a browser.\nLoads ~/.config/vibium/ai.env at start when that file is mode 0600. Changing provider requires --model; per-call options do not change defaults.",
 		Example:   "  vibium ready ai\n  # Tests the configured provider and model.\n  vibium ready ai anthropic --model your-model\n  # Tests Anthropic with the supplied model and ANTHROPIC_API_KEY.\n  vibium ready ai --json\n  # Prints the provider checks as JSON.",
 		Args:      cobra.MaximumNArgs(1),
 		ValidArgs: []string{"openai", "anthropic", "google", "openai-compatible", "local"},
@@ -86,7 +88,7 @@ func runReadiness(cmd *cobra.Command, args []string, aiProbe func(context.Contex
 	if scope == "ready" {
 		scope = "all"
 	}
-	result := setupResult{Ready: true, Scope: scope, Checks: []setupCheck{}, Notes: []string{}}
+	result := setupResult{Ready: true, Scope: scope, Checks: []setupCheck{}, Notes: readyInfoNotes(scope)}
 	if scope != "ai" {
 		part := checkBrowserSetup(cmd, args)
 		result.Ready = part.Ready
@@ -145,6 +147,92 @@ func runReadiness(cmd *cobra.Command, args []string, aiProbe func(context.Contex
 	return result
 }
 
+func readyInfoNotes(scope string) []string {
+	notes := []string{}
+	if scope != "ai" {
+		if note := readyDisplayNote(); note != "" {
+			notes = append(notes, note)
+		}
+	}
+	if note := readyNodeShimNote(); note != "" {
+		notes = append(notes, note)
+	}
+	return notes
+}
+
+func readyDisplayNote() string {
+	if runtime.GOOS != "linux" {
+		return ""
+	}
+	if os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != "" {
+		return ""
+	}
+	return "The browser is visible by default. DISPLAY and WAYLAND_DISPLAY are empty, so SSH and CI sessions need --headless or captures can be empty."
+}
+
+func readyNodeShimNote() string {
+	if runtime.GOOS != "linux" {
+		return ""
+	}
+	// Node 24+ sets /proc/self/comm to MainThread or node-MainThread, not
+	// "node". The executable path in cmdline is the stable signal.
+	cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", os.Getppid()))
+	if err != nil {
+		return ""
+	}
+	parts := strings.Split(strings.TrimRight(string(cmdline), "\x00"), "\x00")
+	if len(parts) == 0 {
+		return ""
+	}
+	base := filepath.Base(parts[0])
+	if base != "node" && base != "nodejs" {
+		return ""
+	}
+	if !nodeShimCmdline(parts) {
+		return ""
+	}
+	return nodeShimNoteFromComm("node")
+}
+
+func nodeShimNoteFromComm(comm string) string {
+	if comm != "node" && comm != "nodejs" {
+		return ""
+	}
+	return "This invocation is still going through the npm JS shim, so postinstall did not replace bin/cli.js with the Go binary. Run: node <package>/postinstall.js"
+}
+
+func nodeShimCmdline(parts []string) bool {
+	if len(parts) < 2 {
+		return false
+	}
+	for _, part := range parts[1:] {
+		if strings.HasPrefix(part, "-") {
+			continue
+		}
+		base := filepath.Base(part)
+		if base == "cli.js" {
+			return true
+		}
+		if base == "vibium" && isNodeScript(part) {
+			return true
+		}
+		break
+	}
+	return false
+}
+
+func isNodeScript(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	buf := make([]byte, 80)
+	n, _ := f.Read(buf)
+	line, _, _ := strings.Cut(string(buf[:n]), "\n")
+	return strings.HasPrefix(line, "#!") && strings.Contains(line, "node")
+}
+
 func readyEnvNote() []string {
 	dir, err := paths.GetConfigDir()
 	if err != nil {
@@ -155,12 +243,20 @@ func readyEnvNote() []string {
 	// statted a literal tilde, so the file was never found.
 	shown := tildePath(path)
 
-	if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
-		return []string{"Found " + shown + "; Vibium does not load it automatically. Use export NAME=value assignments in that file. In Bash/Zsh, run: source " + shown + "; then rerun readiness in the same shell."}
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return []string{"No AI settings file yet. Run: vibium setup (or vibium config init); edit " + shown + "."}
 	}
-	// No settings file yet: name the command that writes one, rather than
-	// leaving the reader to hand-roll a file the tutorial describes in prose.
-	return []string{"No AI settings file yet. Run: vibium config init; edit " + shown + "; then, in Bash/Zsh: source " + shown + " in the shell that runs vibium."}
+	if err != nil || !info.Mode().IsRegular() {
+		return nil
+	}
+	if !envfile.OwnerOnly(info.Mode()) {
+		return []string{"Found " + shown + " but it is readable by others, so Vibium did not load it. Run: chmod 0600 " + shown + "; then rerun."}
+	}
+	if os.Getenv("VIBIUM_AI_PROVIDER") != "" {
+		return nil
+	}
+	return []string{"Found " + shown + ". Set VIBIUM_AI_PROVIDER and VIBIUM_AI_MODEL in that file; Vibium loads it at start when it is mode 0600."}
 }
 
 func writeReadiness(cmd *cobra.Command, result setupResult) {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vibium/clicker/internal/browser"
+	"github.com/vibium/clicker/internal/envfile"
 	"github.com/vibium/clicker/internal/log"
 	"github.com/vibium/clicker/internal/paths"
 )
@@ -140,6 +141,7 @@ func applyGlobalFlags(cmd *cobra.Command) error {
 }
 
 func main() {
+	envfile.Apply(os.Stderr)
 	rootCmd, runCmd := newRootCmd(filepath.Base(os.Args[0]))
 
 	rootCmd.SetArgs(promptArgs(rootCmd, runCmd, os.Args[1:]))
@@ -168,7 +170,7 @@ func newRootCmd(progName string) (root, run *cobra.Command) {
   # One-word prompts need the explicit run command.`,
 		Short: "Browser automation for AI agents and humans",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if isReadyCommand(cmd) {
+			if isReadyCommand(cmd) || isSetupCommand(cmd) {
 				return nil
 			}
 			return applyGlobalFlags(cmd)
@@ -238,6 +240,7 @@ func newRootCmd(progName string) (root, run *cobra.Command) {
 	rootCmd.AddCommand(newA11yTreeCmd())
 	rootCmd.AddCommand(newSleepCmd())
 	rootCmd.AddCommand(newSkillCmd())
+	rootCmd.AddCommand(newSetupCmd())
 	rootCmd.AddCommand(newConfigCmd())
 	rootCmd.AddCommand(newMapCmd())
 	rootCmd.AddCommand(newDiffCmd())

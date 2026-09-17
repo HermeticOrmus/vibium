@@ -13,13 +13,17 @@ const exec = promisify(execFile);
 function environment(t, extra = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vs-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  return {
+  const env = {
     ...process.env, HOME: dir, USERPROFILE: dir, VIBIUM_CACHE_DIR: path.join(dir, 'cache'),
     VIBIUM_SESSION: 'ready-ai', VIBIUM_ENGINE: 'chrome', VIBIUM_ENGINE_PATH: '',
     VIBIUM_ENGINE_CHANNEL: '', VIBIUM_ENGINE_VERSION: '', VIBIUM_CONNECT_URL: '',
-    VIBIUM_AI_PROVIDER: '', VIBIUM_AI_MODEL: '', OPENAI_API_KEY: '',
-    VIBIUM_AI_BASE_URL: '', VIBIUM_AI_REASONING_EFFORT: '', ...extra,
+    ...extra,
   };
+  for (const key of ['VIBIUM_AI_PROVIDER', 'VIBIUM_AI_MODEL', 'OPENAI_API_KEY',
+    'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'VIBIUM_AI_BASE_URL', 'VIBIUM_AI_REASONING_EFFORT']) {
+    if (!(key in extra)) delete env[key];
+  }
+  return env;
 }
 async function run(env, args = ['ready', 'ai', '--json']) {
   try { return { ...(await exec(VIBIUM, args, { env, timeout: 15000 })), code: 0 }; }
@@ -49,7 +53,7 @@ function answer(res, content, toolCalls) {
     message: { role: 'assistant', content, tool_calls: toolCalls } }] }));
 }
 
-test('ready ai lists missing settings and detects an unsourced env file without reading it', async t => {
+test('ready ai loads a 0600 env file and still fails a missing model without printing the key', async t => {
   const env = environment(t);
   const settings = path.join(env.HOME, '.config', 'vibium', 'ai.env');
   fs.mkdirSync(path.dirname(settings), { recursive: true });
@@ -58,29 +62,49 @@ test('ready ai lists missing settings and detects an unsourced env file without 
   for (const args of [['ready', 'ai'], ['ready', 'ai', '--json']]) {
     const result = await run(env, args);
     assert.equal(result.code, 1);
-    assert.match(result.stdout, /VIBIUM_AI_PROVIDER/);
     assert.match(result.stdout, /VIBIUM_AI_MODEL/);
-    assert.match(result.stdout, /source ~\/\.config\/vibium\/ai\.env/);
-    // Both notes contain that source line, so assert on the branch itself:
-    // the file is present, so readiness must say it found one.
-    assert.match(result.stdout, /Found ~\/\.config\/vibium\/ai\.env/);
+    assert.doesNotMatch(result.stdout, /does not load it automatically/);
+    assert.doesNotMatch(result.stdout, /source ~\/\.config\/vibium\/ai\.env/);
     assert.doesNotMatch(result.stdout, /No AI settings file yet/);
     assert.doesNotMatch(result.stdout + result.stderr, /secret-file-marker/);
     if (args.includes('--json')) {
       const body = JSON.parse(result.stdout);
       assert.equal(body.ok, false);
       assert.equal(body.result.ready, false);
-      assert.equal(body.result.checks.find(c => c.name === 'provider').status, 'skipped');
-      assert.equal(body.result.checks.find(c => c.name === 'credentials').status, 'skipped');
-      assert.equal(body.result.checks.find(c => c.name === 'VIBIUM_AI_BASE_URL').status, 'skipped');
-      assert.equal(body.result.checks.find(c => c.name === 'VIBIUM_AI_REASONING_EFFORT').status, 'skipped');
+      assert.equal(body.result.checks.find(c => c.name === 'VIBIUM_AI_PROVIDER').status, 'passed');
+      assert.equal(body.result.checks.find(c => c.name === 'VIBIUM_AI_MODEL').status, 'failed');
       assert.match(body.result.summary, /rerun vibium ready ai\./);
     }
-    assert.doesNotMatch(result.stdout, /\[PASSED\]|OPENAI_API_KEY/);
+    assert.doesNotMatch(result.stdout, /\[PASSED\] provider/);
     assert.match(result.stdout, /rerun vibium ready ai\./);
     noBrowser(env);
   }
   assert.deepEqual(fs.readFileSync(settings), before);
+});
+
+test('ready ai does not execute command substitution in ai.env values', async t => {
+  const env = environment(t);
+  const settings = path.join(env.HOME, '.config', 'vibium', 'ai.env');
+  const marker = path.join(env.HOME, 'pwned');
+  fs.mkdirSync(path.dirname(settings), { recursive: true });
+  fs.writeFileSync(settings, 'OPENAI_API_KEY=$(touch pwned; echo leaked)\nVIBIUM_AI_PROVIDER=openai\n', { mode: 0o600 });
+  const result = await run(env, ['ready', 'ai', '--json']);
+  assert.equal(result.code, 1);
+  assert.equal(fs.existsSync(marker), false, 'command substitution ran');
+  assert.doesNotMatch(result.stdout + result.stderr, /leaked|secret-file-marker|pwned/);
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.result.checks.find(c => c.name === 'VIBIUM_AI_PROVIDER').status, 'passed');
+  noBrowser(env);
+});
+
+test('ready ai points at config init when HOME has no settings file', async t => {
+  const env = environment(t);
+  const result = await run(env, ['ready', 'ai']);
+  assert.equal(result.code, 1);
+  assert.match(result.stdout, /No AI settings file yet/);
+  assert.match(result.stdout, /vibium config init/);
+  assert.match(result.stdout, /vibium setup/);
+  noBrowser(env);
 });
 
 test('ready ai exercises the actual provider transport and reports readiness in text and JSON', async t => {
@@ -171,6 +195,17 @@ test('plain ready skips unconfigured AI but fails an unavailable browser', async
   assert.equal(result.scope, 'all');
   assert.equal(result.checks.find(c => c.name === 'ai').status, 'skipped');
   assert.equal(result.checks.find(c => c.name === 'browser.installation').status, 'failed');
+  noBrowser(env);
+});
+
+test('ready notes empty DISPLAY without treating it as a failure', async t => {
+  const env = environment(t, { DISPLAY: '', WAYLAND_DISPLAY: '' });
+  const response = await run(env, ['ready', '--json']);
+  assert.equal(response.code, 1);
+  const body = JSON.parse(response.stdout);
+  const result = body.result;
+  assert.equal(result.checks.find(c => c.name === 'browser.installation').status, 'failed');
+  assert.ok(result.notes.some(note => note.includes('--headless')), result.notes);
   noBrowser(env);
 });
 

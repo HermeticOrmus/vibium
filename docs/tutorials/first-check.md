@@ -27,17 +27,19 @@ Run and Check use Vibium's own model configuration. Your coding agent's
 subscription does not configure it automatically. This example uses OpenAI;
 for other providers, use the [provider guide](../reference/model-providers.md).
 
-If you already have working settings, keep them and load them below.
-Otherwise, create a private settings file:
+The happy path is [vibium setup](../how-to-guides/setup.md):
 
 ```bash
-vibium config init
-# Wrote /Users/you/.config/vibium/ai.env (0600) — provider, model and API key for run and check
-# Edit it, then: source /Users/you/.config/vibium/ai.env
+vibium setup
 ```
 
-That writes a commented file readable only by you. Open
-`~/.config/vibium/ai.env` in your editor and set:
+That installs a missing browser, writes `~/.config/vibium/ai.env` at mode 0600,
+and runs readiness. Vibium loads the file at start, so you do not need to
+`source` it.
+
+If you already have working settings, keep them. To write the commented
+template without prompting, use `vibium config init` and edit
+`~/.config/vibium/ai.env`:
 
 ```bash
 export VIBIUM_AI_PROVIDER=openai
@@ -47,22 +49,17 @@ export OPENAI_API_KEY='replace-with-your-api-key'
 ```
 
 Use a model your API account can access. This model uses `none` for tool calls;
-other models may use different settings. Keep `export` on each line so the
-settings reach Vibium, and keep your actual key in the file rather than chat
-or project source code.
-
-Load the file in the terminal you'll use for this tutorial:
+other models may use different settings. Keep your actual key in the file
+rather than chat or project source code. Leave the file mode 0600.
 
 ```bash
-source ~/.config/vibium/ai.env
 vibium ready
 ```
 
 Wait for browser installation and AI checks to pass. Readiness checks browser
 files without opening a browser. If one is missing, run the suggested
 `vibium install` command, then retry. Other failures also include a suggested fix.
-Vibium does not load the file automatically, so source it again in each new
-shell. These shared settings work for both Run and Check.
+These shared settings work for both Run and Check.
 
 ## 2. Check a website
 

@@ -62,8 +62,10 @@ func newConfigInitCmd() *cobra.Command {
 		Long: `Write a commented settings file to the Vibium config directory.
 
 Every setting is present and documented in place, so the file is its own
-reference. Vibium does not load these files automatically — source the one
-you want in the shell that runs vibium.`,
+reference. vibium setup writes a filled ai.env; this command writes the
+template. Vibium loads ai.env at start when the file is mode 0600.
+cloud-browser.env is not loaded automatically; source that file in the
+shell that runs vibium.`,
 		Example: `  vibium config init
   # Wrote ~/.config/vibium/ai.env (0600)
 
@@ -162,6 +164,10 @@ func writeConfigTemplate(cmd *cobra.Command, t configTemplate, force bool) (stri
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s (0600) — %s\n", tildePath(path), t.what)
-	fmt.Fprintf(cmd.OutOrStdout(), "Edit it, then: source %s\n", tildePath(path))
+	if t.name == "ai" {
+		fmt.Fprintf(cmd.OutOrStdout(), "Edit it; vibium loads it at start when the file is mode 0600.\n")
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "Edit it, then: source %s\n", tildePath(path))
+	}
 	return path, nil
 }

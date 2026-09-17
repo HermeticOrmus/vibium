@@ -7,6 +7,8 @@
 const { test, describe, before, after } = require("../../helpers/capabilities").suite("core");
 const assert = require('node:assert');
 const { execSync, spawn } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('path');
 const { VIBIUM } = require("../../helpers");
 
@@ -57,6 +59,24 @@ describe('CLI: Input Tools', () => {
     });
     assert.match(result, /Installed Vibium skill/, 'Should confirm install');
     assert.match(result, /SKILL\.md/, 'Should mention SKILL.md');
+  });
+
+  test('skill command installs to ~/.grok/skills/ with --agent grok', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vibium-skill-'));
+    try {
+      const result = execSync(`${VIBIUM} add-skill --agent grok`, {
+        encoding: 'utf-8',
+        timeout: 5000,
+        env: { ...process.env, HOME: home, USERPROFILE: home },
+      });
+      assert.match(result, /Installed Vibium skill/, 'Should confirm install');
+      assert.ok(
+        fs.existsSync(path.join(home, '.grok', 'skills', 'browser', 'SKILL.md')),
+        'Should write SKILL.md under the sandboxed HOME'
+      );
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
   });
 });
 
