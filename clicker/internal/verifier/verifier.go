@@ -39,6 +39,8 @@ func (c Config) CredentialVariable() string {
 		return "ANTHROPIC_API_KEY"
 	case "google":
 		return "GOOGLE_API_KEY"
+	case "xai":
+		return "XAI_API_KEY"
 	default:
 		return "OPENAI_API_KEY"
 	}
@@ -54,6 +56,8 @@ func (c Config) Endpoint() string {
 		return "https://generativelanguage.googleapis.com/v1beta"
 	case "local":
 		return "http://127.0.0.1:8080/v1"
+	case "xai":
+		return "https://api.x.ai/v1"
 	default:
 		return "https://api.openai.com/v1"
 	}
@@ -85,9 +89,9 @@ func (c Config) Checks() []ConfigCheck {
 		validEffort = false
 	}
 	check(prefix+"REASONING_EFFORT", validEffort, "invalid "+prefix+"REASONING_EFFORT")
-	check(prefix+"PROVIDER", c.Provider == "openai" || c.Provider == "openai-compatible" || c.Provider == "local" || c.Provider == "anthropic" || c.Provider == "google", "set "+prefix+"PROVIDER to openai, anthropic, google, openai-compatible, or local")
+	check(prefix+"PROVIDER", c.Provider == "openai" || c.Provider == "xai" || c.Provider == "openai-compatible" || c.Provider == "local" || c.Provider == "anthropic" || c.Provider == "google", "set "+prefix+"PROVIDER to openai, xai, anthropic, google, openai-compatible, or local")
 	check(prefix+"MODEL", strings.TrimSpace(c.Model) != "", prefix+"MODEL is required")
-	requiresKey := c.Provider == "openai" || c.Provider == "anthropic" || c.Provider == "google"
+	requiresKey := c.Provider == "openai" || c.Provider == "xai" || c.Provider == "anthropic" || c.Provider == "google"
 	check(c.CredentialVariable(), !requiresKey || strings.TrimSpace(c.APIKey) != "", c.CredentialVariable()+" is required")
 	endpointProblem := ""
 	if c.Provider == "openai-compatible" && c.BaseURL == "" {

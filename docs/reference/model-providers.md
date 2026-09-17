@@ -10,12 +10,13 @@ conversation; the operation selects its instructions and tool permissions.
 | Optional API base URL | `VIBIUM_AI_BASE_URL` |
 | Optional OpenAI reasoning effort | `VIBIUM_AI_REASONING_EFFORT` |
 
-Both operations support `openai`, `anthropic`, `google`, `openai-compatible`,
+Both operations support `openai`, `xai`, `anthropic`, `google`, `openai-compatible`,
 and `local`. Provider credentials use their native environment variables:
 
 | Provider | Credential | Default API base URL |
 |----------|------------|----------------------|
 | `openai` | `OPENAI_API_KEY`, required | `https://api.openai.com/v1` |
+| `xai` | `XAI_API_KEY`, required | `https://api.x.ai/v1` |
 | `anthropic` | `ANTHROPIC_API_KEY`, required | `https://api.anthropic.com/v1` |
 | `google` | `GOOGLE_API_KEY`, required | `https://generativelanguage.googleapis.com/v1beta` |
 | `openai-compatible` | `OPENAI_API_KEY`, optional | Explicit base URL required |
@@ -134,6 +135,17 @@ export VIBIUM_AI_REASONING_EFFORT=none
 vibium ready ai
 ```
 
+xAI (Grok) uses the same Chat Completions protocol with `XAI_API_KEY`:
+
+```bash
+export VIBIUM_AI_PROVIDER=xai
+export VIBIUM_AI_MODEL=grok-4
+unset VIBIUM_AI_BASE_URL
+vibium ready ai
+```
+
+`vibium ready ai xai --model grok-4` selects the same provider for one call.
+
 Use different providers for individual calls without changing the shared defaults:
 
 ```bash
@@ -198,7 +210,7 @@ overrides take effect immediately and do not require a runtime restart.
 
 ## Protocol and reasoning behavior
 
-OpenAI retains the existing Chat Completions function-tool protocol.
+OpenAI and xAI use the Chat Completions function-tool protocol.
 Compatible endpoints must accept function tools, `parallel_tool_calls: false`,
 and `max_completion_tokens`. Image input is needed when an operation requests
 a screenshot. See [OpenAI function calling](https://developers.openai.com/api/docs/guides/function-calling).
@@ -209,8 +221,8 @@ translate requested PNG/JPEG screenshots into the provider's image format.
 See [Anthropic tool calls](https://platform.claude.com/docs/en/agents-and-tools/tool-use/handle-tool-calls)
 and [Gemini API schemas](https://ai.google.dev/api/generate-content).
 
-Reasoning-effort settings are supported only for OpenAI and compatible
-endpoints in this slice. Leave them unset for Anthropic and Google; extended
+Reasoning-effort settings are supported for OpenAI, xAI, and compatible
+endpoints. Leave them unset for Anthropic and Google; extended
 thinking is not requested from Anthropic. Free-form assistant text accompanying
 tool calls and readable reasoning are discarded. Gemini's opaque function-call
 signatures are retained only in memory during that invocation and returned to

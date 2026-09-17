@@ -43,7 +43,7 @@ must be new and must have different paths; existing files are never replaced.
 
 ## Provider configuration
 
-Check supports OpenAI, Anthropic, Google Gemini, OpenAI-compatible servers,
+Check supports OpenAI, xAI, Anthropic, Google Gemini, OpenAI-compatible servers,
 and the `local` alias. See [model providers](model-providers.md) for native
 credentials, endpoint defaults, and shared AI settings. The examples
 below retain the OpenAI setup.

@@ -143,40 +143,44 @@ func TestInvalidVerdictToolArgsReturnToModel(t *testing.T) {
 	}
 }
 
-// On the corrective turn after a plain-text final message, the openai
-// provider forces return_verdict via tool_choice; openai-compatible keeps
+// On the corrective turn after a plain-text final message, native openai and
+// xai providers force return_verdict via tool_choice; openai-compatible keeps
 // auto so the compatibility floor stays at plain function tools.
 func TestRepairTurnForcesVerdictTool(t *testing.T) {
-	requests := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requests++
-		var body struct {
-			ToolChoice *struct {
-				Type     string `json:"type"`
-				Function struct {
-					Name string `json:"name"`
-				} `json:"function"`
-			} `json:"tool_choice"`
-		}
-		json.NewDecoder(r.Body).Decode(&body)
-		if requests == 1 {
-			if body.ToolChoice != nil {
-				t.Error("tool choice forced before any failure")
+	for _, provider := range []string{"openai", "xai"} {
+		t.Run(provider, func(t *testing.T) {
+			requests := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests++
+				var body struct {
+					ToolChoice *struct {
+						Type     string `json:"type"`
+						Function struct {
+							Name string `json:"name"`
+						} `json:"function"`
+					} `json:"tool_choice"`
+				}
+				json.NewDecoder(r.Body).Decode(&body)
+				if requests == 1 {
+					if body.ToolChoice != nil {
+						t.Error("tool choice forced before any failure")
+					}
+					answer(w, "The evidence is clear: "+verdict, nil)
+					return
+				}
+				if body.ToolChoice == nil || body.ToolChoice.Type != "function" || body.ToolChoice.Function.Name != "return_verdict" {
+					t.Errorf("corrective turn did not force return_verdict: %+v", body.ToolChoice)
+				}
+				answer(w, nil, verdictCall("v1", verdict))
+			}))
+			defer server.Close()
+			req := testRequest(server.URL)
+			req.Config.Provider = provider
+			result, err := (&OpenAI{}).Check(context.Background(), req, &fakeTools{})
+			if err != nil || result.Status != "passed" || requests != 2 {
+				t.Fatalf("result=%+v err=%v requests=%d", result, err, requests)
 			}
-			answer(w, "The evidence is clear: "+verdict, nil)
-			return
-		}
-		if body.ToolChoice == nil || body.ToolChoice.Type != "function" || body.ToolChoice.Function.Name != "return_verdict" {
-			t.Errorf("corrective turn did not force return_verdict: %+v", body.ToolChoice)
-		}
-		answer(w, nil, verdictCall("v1", verdict))
-	}))
-	defer server.Close()
-	req := testRequest(server.URL)
-	req.Config.Provider = "openai"
-	result, err := (&OpenAI{}).Check(context.Background(), req, &fakeTools{})
-	if err != nil || result.Status != "passed" || requests != 2 {
-		t.Fatalf("result=%+v err=%v requests=%d", result, err, requests)
+		})
 	}
 }
 

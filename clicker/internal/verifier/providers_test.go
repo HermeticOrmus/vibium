@@ -31,7 +31,7 @@ func TestSharedConfigurationAndLocalAlias(t *testing.T) {
 	if err != nil || config.Endpoint() != "http://127.0.0.1:8080/v1" || config.APIKey != "" || config.Model != "local-model" {
 		t.Fatalf("local config: %+v %v", config, err)
 	}
-	for _, row := range []struct{ provider, key string }{{"anthropic", "ANTHROPIC_API_KEY"}, {"google", "GOOGLE_API_KEY"}} {
+	for _, row := range []struct{ provider, key string }{{"anthropic", "ANTHROPIC_API_KEY"}, {"google", "GOOGLE_API_KEY"}, {"xai", "XAI_API_KEY"}} {
 		t.Setenv("VIBIUM_AI_PROVIDER", row.provider)
 		t.Setenv(row.key, "native-secret")
 		t.Setenv("OPENAI_API_KEY", "wrong-key")
@@ -42,8 +42,22 @@ func TestSharedConfigurationAndLocalAlias(t *testing.T) {
 	}
 }
 
+func TestXAINativeDefaults(t *testing.T) {
+	c := Config{Provider: "xai", Model: "grok-4", APIKey: "k"}
+	if c.Endpoint() != "https://api.x.ai/v1" || c.CredentialVariable() != "XAI_API_KEY" {
+		t.Fatalf("xai defaults: %+v", c)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	c.APIKey = ""
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "XAI_API_KEY") {
+		t.Fatalf("missing xai key: %v", err)
+	}
+}
+
 func TestNativeProviderProbeAndFreshCheck(t *testing.T) {
-	for _, provider := range []string{"anthropic", "google", "local", "openai-compatible"} {
+	for _, provider := range []string{"anthropic", "google", "local", "openai-compatible", "xai"} {
 		t.Run(provider, func(t *testing.T) {
 			calls := 0
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -126,6 +140,9 @@ func TestNativeProviderProbeAndFreshCheck(t *testing.T) {
 					}
 					if provider == "local" && r.Header.Get("Authorization") != "" {
 						t.Error("local required a key")
+					}
+					if provider == "xai" && r.Header.Get("Authorization") != "Bearer provider-secret" {
+						t.Error("wrong xAI transport")
 					}
 					toolName = body["tools"].([]interface{})[0].(map[string]interface{})["function"].(map[string]interface{})["name"].(string)
 					for _, m := range body["messages"].([]interface{}) {

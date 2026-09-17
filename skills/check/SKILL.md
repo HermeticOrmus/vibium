@@ -22,6 +22,7 @@ require a browser; skip browser readiness for them.
 
 For OpenAI, export `VIBIUM_AI_PROVIDER=openai`,
 `VIBIUM_AI_MODEL`, and `OPENAI_API_KEY`.
+For xAI, select `xai` and export `XAI_API_KEY` (for example `--model grok-4`).
 For Anthropic, select `anthropic` and export `ANTHROPIC_API_KEY`; for Google,
 select `google` and export `GOOGLE_API_KEY`. Set a model available to that
 provider. Leave `VIBIUM_AI_REASONING_EFFORT` unset for Anthropic/Google.

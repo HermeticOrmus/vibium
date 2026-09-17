@@ -13,6 +13,7 @@ async function run(t, options = {}) {
   const f = await fixture(), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-cli-'));
   const env = { ...process.env, ...f.env, VIBIUM_SESSION: `run-${process.pid}`, VIBIUM_ENGINE: ENGINE, VIBIUM_ENGINE_CHANNEL: '', VIBIUM_ENGINE_PATH: '', VIBIUM_CONNECT_URL: '', VIBIUM_AI_PROVIDER: options.provider || 'openai-compatible' };
   if (env.VIBIUM_AI_PROVIDER === 'openai') env.OPENAI_API_KEY = 'openai-test-key';
+  if (env.VIBIUM_AI_PROVIDER === 'xai') env.XAI_API_KEY = 'xai-test-key';
   const cli = async (...args) => JSON.parse((await exec(VIBIUM, ['--json', '--headless', ...args], { env, timeout: 230000, maxBuffer: 8*1024*1024 })).stdout).result;
   const output = path.join(dir, 'run.zip'), original = path.join(dir, 'builder.zip');
   try {
@@ -60,7 +61,7 @@ async function run(t, options = {}) {
     fs.rmSync(dir, { recursive: true, force: true }); await f.close();
   }
 }
-for (const provider of ['openai', 'anthropic', 'google', 'openai-compatible', 'local']) test(`Run CLI uses ${provider} browser tools and shared AI configuration`, { timeout: 120000 }, t => run(t, { provider, existing: true }));
+for (const provider of ['openai', 'xai', 'anthropic', 'google', 'openai-compatible', 'local']) test(`Run CLI uses ${provider} browser tools and shared AI configuration`, { timeout: 120000 }, t => run(t, { provider, existing: true }));
 for (const state of [{}, { incomplete: true }, { error: true }, { keepOpen: true }, { keepOpen: true, error: true }, { existing: true, error: true }, { existing: true, privacy: true }]) test(`Run ownership and evidence ${JSON.stringify(state)}`, { timeout: 120000 }, t => run(t, state));
 test('Run rejects archive/report flags and requires shared AI configuration', async () => {
   // Old per-feature variables must not silently configure the shared model loop.
