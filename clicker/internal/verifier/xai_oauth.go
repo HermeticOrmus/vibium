@@ -227,28 +227,21 @@ func persistXAITokens(store xaiStore, access, refresh string) error {
 		}
 		return writePrivateFile(store.path, data)
 	case "grok":
-		file, err := jsonObject(store.raw)
+		path, err := xaiVibiumAuthPath()
 		if err != nil {
 			return err
 		}
-		entry, err := jsonObject(file[store.grokKey])
-		if err != nil {
-			entry = map[string]json.RawMessage{}
-		}
-		setJSONString(entry, "key", access)
-		if refresh != "" {
-			setJSONString(entry, "refresh_token", refresh)
-		}
-		patched, err := json.Marshal(entry)
+		data, err := json.Marshal(xaiVibiumAuth{
+			Issuer:       xaiOIDCIssuer,
+			ClientID:     store.client,
+			AccessToken:  access,
+			RefreshToken: refresh,
+			TokenType:    "Bearer",
+		})
 		if err != nil {
 			return err
 		}
-		file[store.grokKey] = patched
-		data, err := json.Marshal(file)
-		if err != nil {
-			return err
-		}
-		return writePrivateFile(store.path, data)
+		return writePrivateFile(path, data)
 	default:
 		return fmt.Errorf("unknown xAI auth store")
 	}

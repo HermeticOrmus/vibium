@@ -207,13 +207,17 @@ func TestXAIExpiredJWTRefreshesAndWritesRotatedRefresh(t *testing.T) {
 	}
 }
 
-func TestXAIGrokRefreshWritesRotatedTokenPreservingFields(t *testing.T) {
-	home, _ := isolateXAIAuth(t)
+func TestXAIGrokRefreshCopiesToVibiumStoreWithoutWritingGrok(t *testing.T) {
+	home, configDir := isolateXAIAuth(t)
 	now := time.Unix(1_700_000_000, 0)
 	xaiAuthNow = func() time.Time { return now }
 	expired := jwtWithExp(now.Unix() - 10)
 	fresh := jwtWithExp(now.Add(time.Hour).Unix())
 	path := writeGrokAuth(t, home, expired, "grok-old-refresh")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		if r.FormValue("refresh_token") != "grok-old-refresh" {
@@ -228,18 +232,23 @@ func TestXAIGrokRefreshWritesRotatedTokenPreservingFields(t *testing.T) {
 	if err != nil || c.APIKey != fresh {
 		t.Fatalf("grok refresh: %+v %v", c, err)
 	}
-	raw, err := os.ReadFile(path)
+	after, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(raw), "grok-new-refresh") || !strings.Contains(string(raw), fresh) {
-		t.Fatalf("grok file missing rotated tokens")
+	if string(after) != string(before) {
+		t.Fatal("refresh mutated ~/.grok/auth.json")
 	}
-	if !strings.Contains(string(raw), "dev@example.test") || !strings.Contains(string(raw), "OTHER-PROVIDER-TOKEN") {
-		t.Fatal("lost unrelated grok auth.json fields")
+	if !strings.Contains(string(after), "grok-old-refresh") || !strings.Contains(string(after), "OTHER-PROVIDER-TOKEN") {
+		t.Fatal("lost grok auth.json contents")
 	}
-	if strings.Contains(string(raw), "grok-old-refresh") {
-		t.Fatal("old grok refresh token was not replaced")
+	raw, err := os.ReadFile(filepath.Join(configDir, xaiAuthFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored xaiVibiumAuth
+	if json.Unmarshal(raw, &stored) != nil || stored.AccessToken != fresh || stored.RefreshToken != "grok-new-refresh" {
+		t.Fatalf("did not copy rotated tokens to vibium store: %s", raw)
 	}
 }
 

@@ -137,7 +137,9 @@ vibium ready ai
 
 xAI (Grok) uses the same Chat Completions protocol. Set `XAI_API_KEY`, or sign
 in with `vibium login xai`. An existing Grok CLI session in `~/.grok/auth.json`
-is reused when the API key is unset. The API key wins when both are present.
+is read when the API key is unset. Token refresh copies into
+`~/.config/vibium/xai-auth.json` and does not write the Grok file. The API key
+wins when both are present.
 
 ```bash
 export VIBIUM_AI_PROVIDER=xai
