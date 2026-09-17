@@ -273,15 +273,25 @@ func writeReadiness(cmd *cobra.Command, result setupResult) {
 			fmt.Fprintf(cmd.OutOrStdout(), "Installed: %s (%s) — %s\n", b.Engine, b.Channel, b.Path)
 		}
 	}
+	color := writerColor(cmd.OutOrStdout())
 	for _, check := range result.Checks {
-		fmt.Fprintf(cmd.OutOrStdout(), "[%s] %s: %s\n", strings.ToUpper(check.Status), check.Name, check.Message)
+		status := strings.ToUpper(check.Status)
+		switch check.Status {
+		case "passed":
+			status = maybePaint(color, brandOK, status)
+		case "failed":
+			status = maybePaint(color, brandFail, status)
+		default:
+			status = maybePaint(color, brandMuted, status)
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "[%s] %s: %s\n", status, check.Name, check.Message)
 		if check.Fix != "" {
-			fmt.Fprintf(cmd.OutOrStdout(), "  Fix: %s\n", check.Fix)
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s %s\n", maybePaint(color, brandAccent, "Fix:"), check.Fix)
 		}
 	}
-	label := "READY"
+	label := maybePaint(color, brandOK, "READY")
 	if !result.Ready {
-		label = "NOT READY"
+		label = maybePaint(color, brandFail, "NOT READY")
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "\n%s: %s\n", label, result.Summary)
 	for _, note := range result.Notes {

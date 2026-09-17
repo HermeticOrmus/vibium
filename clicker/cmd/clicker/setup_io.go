@@ -38,6 +38,21 @@ func inputIsTTY(cmd *cobra.Command) bool {
 	return info.Mode()&os.ModeCharDevice != 0
 }
 
+func (ui *setupUI) useColor() bool {
+	return writerColor(ui.out)
+}
+
+func (ui *setupUI) banner() {
+	if jsonOutput {
+		return
+	}
+	fmt.Fprint(ui.out, setupBanner(ui.useColor()))
+}
+
+func (ui *setupUI) heading(title string) {
+	ui.println("%s", maybePaint(ui.useColor(), brandAccent, "▸ "+title))
+}
+
 func (ui *setupUI) println(format string, args ...any) {
 	if jsonOutput {
 		return
@@ -45,12 +60,21 @@ func (ui *setupUI) println(format string, args ...any) {
 	fmt.Fprintf(ui.out, format+"\n", args...)
 }
 
+func (ui *setupUI) ok(format string, args ...any) {
+	ui.println("%s", maybePaint(ui.useColor(), brandOK, fmt.Sprintf(format, args...)))
+}
+
+func (ui *setupUI) skip(format string, args ...any) {
+	ui.println("%s", maybePaint(ui.useColor(), brandMuted, fmt.Sprintf(format, args...)))
+}
+
 func (ui *setupUI) prompt(label, def string) (string, error) {
 	if !ui.interactive {
 		return def, nil
 	}
+	label = maybePaint(ui.useColor(), brandAccent, label)
 	if def != "" {
-		fmt.Fprintf(ui.out, "%s [%s]: ", label, def)
+		fmt.Fprintf(ui.out, "%s [%s]: ", label, maybePaint(ui.useColor(), brandMuted, def))
 	} else {
 		fmt.Fprintf(ui.out, "%s: ", label)
 	}
@@ -68,7 +92,7 @@ func (ui *setupUI) promptSecret(label string) (string, error) {
 	if !ui.interactive {
 		return "", nil
 	}
-	fmt.Fprintf(ui.out, "%s: ", label)
+	fmt.Fprintf(ui.out, "%s: ", maybePaint(ui.useColor(), brandAccent, label))
 	restore := func() {}
 	if f, ok := ui.in.(*os.File); ok {
 		restore = disableEcho(f)

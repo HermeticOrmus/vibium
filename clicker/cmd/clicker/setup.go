@@ -83,6 +83,7 @@ func runSetup(cmd *cobra.Command, section string, nonInteractive, quick bool) {
 	}
 	interactive := !nonInteractive && !jsonOutput && inputIsTTY(cmd)
 	ui := newSetupUI(cmd, interactive)
+	ui.banner()
 
 	want := map[string]bool{"browser": true, "ai": true, "skills": true}
 	if section != "" {
@@ -100,12 +101,15 @@ func runSetup(cmd *cobra.Command, section string, nonInteractive, quick bool) {
 
 	result := setupCommandResult{}
 	if want["browser"] {
+		ui.heading("Browser")
 		result.Sections = append(result.Sections, setupBrowser(cmd, ui, quick))
 	}
 	if want["ai"] {
+		ui.heading("AI")
 		result.Sections = append(result.Sections, setupAI(cmd, ui, quick))
 	}
 	if want["skills"] {
+		ui.heading("Skills")
 		result.Sections = append(result.Sections, setupSkills(cmd, ui, quick))
 	}
 
@@ -157,11 +161,11 @@ func setupBrowser(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 		return setupSection{Name: "browser", Status: "failed", Message: fmt.Sprintf("unsupported engine %q (supported: chrome, firefox)", engine)}
 	}
 	if quick && browser.EngineInstalled(engine) {
-		ui.println("%s is already installed; skipping (--quick).", engine)
+		ui.skip("%s is already installed; skipping (--quick).", engine)
 		return setupSection{Name: "browser", Status: "skipped", Message: engine + " is already installed."}
 	}
 	if browser.EngineInstalled(engine) {
-		ui.println("%s is already installed.", engine)
+		ui.ok("%s is already installed.", engine)
 		part := checkBrowserSetup(cmd, nil)
 		if !part.Ready {
 			return setupSection{Name: "browser", Status: "failed", Message: browserSectionMessage(part)}
@@ -191,7 +195,7 @@ func setupBrowser(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 	if installPath == "" {
 		installPath = selectedBrowserPath(part)
 	}
-	ui.println("Installed %s.", engine)
+	ui.ok("Installed %s.", engine)
 	return setupSection{Name: "browser", Status: "done", Message: "Installed " + engine + ".", Path: installPath}
 }
 
@@ -223,15 +227,15 @@ func setupAI(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 	}
 	shown := tildePath(path)
 	if quick && aiConfigValid() {
-		ui.println("AI settings are already valid; skipping (--quick).")
+		ui.skip("AI settings are already valid; skipping (--quick).")
 		return setupSection{Name: "ai", Status: "skipped", Message: "AI settings are already valid.", Path: path}
 	}
 	if !ui.interactive {
 		if _, err := os.Stat(path); err == nil {
-			ui.println("Left existing %s unchanged (non-interactive).", shown)
+			ui.skip("Left existing %s unchanged (non-interactive).", shown)
 			return setupSection{Name: "ai", Status: "skipped", Message: "Existing ai.env was left unchanged.", Path: path}
 		}
-		ui.println("Skipped AI: no prompts in non-interactive mode. Run vibium setup ai in a terminal, or vibium config init.")
+		ui.skip("Skipped AI: no prompts in non-interactive mode. Run vibium setup ai in a terminal, or vibium config init.")
 		return setupSection{Name: "ai", Status: "skipped", Message: "No ai.env yet; non-interactive setup does not write credentials."}
 	}
 
@@ -239,10 +243,11 @@ func setupAI(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 	if provider == "" {
 		provider = "openai"
 	}
-	ui.println("AI provider:")
+	ui.println("%s", maybePaint(ui.useColor(), brandText, "AI provider:"))
 	defIdx := 1
 	for i, p := range setupProviders {
-		ui.println("  %d) %s", i+1, p)
+		num := maybePaint(ui.useColor(), brandAccent, fmt.Sprintf("%d)", i+1))
+		ui.println("  %s %s", num, p)
 		if p == provider {
 			defIdx = i + 1
 		}
@@ -324,21 +329,21 @@ func setupAI(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 		return setupSection{Name: "ai", Status: "failed", Message: err.Error()}
 	}
 	applyWrittenAI(kv)
-	ui.println("Wrote %s (0600).", shown)
+	ui.ok("Wrote %s (0600).", shown)
 	return setupSection{Name: "ai", Status: "done", Message: "Wrote AI settings.", Path: path}
 }
 
 func setupSkills(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 	agent, present := setupSkillAgent()
 	if !ui.interactive && !present {
-		ui.println("Skipped skills: no ~/.grok or ~/.claude directory.")
+		ui.skip("Skipped skills: no ~/.grok or ~/.claude directory.")
 		return setupSection{Name: "skills", Status: "skipped", Message: "No ~/.grok or ~/.claude directory; skills were not installed."}
 	}
 	if !present {
 		agent = defaultSkillAgent()
 	}
 	if quick && skillsPresent(agent) {
-		ui.println("Skills already installed for %s; skipping (--quick).", agent)
+		ui.skip("Skills already installed for %s; skipping (--quick).", agent)
 		return setupSection{Name: "skills", Status: "skipped", Message: "Skills already installed.", Agent: agent}
 	}
 	if ui.interactive {
@@ -347,7 +352,7 @@ func setupSkills(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 			return setupSection{Name: "skills", Status: "failed", Message: err.Error(), Agent: agent}
 		}
 		if !ok {
-			ui.println("Skipped skills.")
+			ui.skip("Skipped skills.")
 			return setupSection{Name: "skills", Status: "skipped", Message: "Skills install declined.", Agent: agent}
 		}
 	}
@@ -359,7 +364,7 @@ func setupSkills(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 			return setupSection{Name: "skills", Status: "failed", Message: err.Error(), Agent: agent, Paths: paths}
 		}
 		paths = append(paths, skillPath)
-		ui.println("Installed %s skill to %s.", name, dir)
+		ui.ok("Installed %s skill to %s.", name, dir)
 	}
 	return setupSection{Name: "skills", Status: "done", Message: "Installed browser and check skills.", Agent: agent, Paths: paths}
 }
