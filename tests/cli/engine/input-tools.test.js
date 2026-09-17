@@ -57,6 +57,8 @@ describe('CLI: Input Tools', () => {
     });
     assert.match(result, /Installed Vibium skill/, 'Should confirm install');
     assert.match(result, /SKILL\.md/, 'Should mention SKILL.md');
+    assert.match(result, /\.claude/, 'Should install for Claude Code');
+    assert.match(result, /\.grok/, 'Should install for Grok');
   });
 });
 
