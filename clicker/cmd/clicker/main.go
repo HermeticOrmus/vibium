@@ -168,7 +168,7 @@ func newRootCmd(progName string) (root, run *cobra.Command) {
   # One-word prompts need the explicit run command.`,
 		Short: "Browser automation for AI agents and humans",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if isReadyCommand(cmd) {
+			if isReadyCommand(cmd) || isSetupCommand(cmd) {
 				return nil
 			}
 			return applyGlobalFlags(cmd)
@@ -238,6 +238,7 @@ func newRootCmd(progName string) (root, run *cobra.Command) {
 	rootCmd.AddCommand(newA11yTreeCmd())
 	rootCmd.AddCommand(newSleepCmd())
 	rootCmd.AddCommand(newSkillCmd())
+	rootCmd.AddCommand(newSetupCmd())
 	rootCmd.AddCommand(newConfigCmd())
 	rootCmd.AddCommand(newMapCmd())
 	rootCmd.AddCommand(newDiffCmd())

@@ -31,6 +31,7 @@ runbooks).
 | Run a live check yourself | [Part 1: Check a live website](tutorials/first-check.md) |
 | Set up Vibium for Codex | [Use Vibium with Codex](how-to-guides/using-vibium-with-codex.md) |
 | Set up Vibium for Claude Code | [Use Vibium with Claude Code](how-to-guides/using-vibium-with-claude-code.md) |
+| Configure browser, AI, and skills | [Set up Vibium](how-to-guides/setup.md) |
 | Connect Claude Desktop Chat to Vibium | [Use Vibium with Claude Desktop](how-to-guides/using-vibium-with-claude-desktop.md) |
 | Write and run a check with a coding agent | [Part 2: Check with your coding agent](tutorials/check-with-a-coding-agent.md) |
 | Check evidence from a saved run | [Part 3: Check a recording or trace](tutorials/check-from-a-recording.md) |

@@ -121,6 +121,7 @@ const CLASSES = {
   'select': 'usage-error',
   'serve': 'exempt', // runs until interrupted
   'set': 'usage-error',
+  'setup': 'envelope',
   'sleep': 'usage-error',
   'start': 'envelope',
   'stop': 'envelope',
@@ -173,6 +174,7 @@ function run(args, extraEnv = {}) {
 // the cache, so the switch must be off).
 const ENV_OVERRIDES = {
   'install': () => ({ VIBIUM_CACHE_DIR: fakeCache, VIBIUM_SKIP_BROWSER_DOWNLOAD: '' }),
+  'setup': () => ({ VIBIUM_CACHE_DIR: fakeCache, VIBIUM_SKIP_BROWSER_DOWNLOAD: '' }),
 };
 
 function seedFakeChromeCache(cacheDir) {
