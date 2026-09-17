@@ -13,7 +13,7 @@ import (
 	"github.com/vibium/clicker/internal/verifier"
 )
 
-var setupProviders = []string{"openai", "anthropic", "google", "openai-compatible", "local"}
+var setupProviders = []string{"openai", "xai", "anthropic", "google", "openai-compatible", "local"}
 
 type setupSection struct {
 	Name    string   `json:"name"`
@@ -29,35 +29,26 @@ type setupCommandResult struct {
 	Ready    *setupResult   `json:"ready,omitempty"`
 }
 
-func isSetupCommand(cmd *cobra.Command) bool {
-	for c := cmd; c != nil; c = c.Parent() {
-		if c.Name() == "setup" {
-			return true
-		}
-	}
-	return false
-}
-
 func newSetupCmd() *cobra.Command {
 	var nonInteractive, quick bool
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"standalone": "true"},
 		Use:         "setup [browser|ai|skills]",
 		Short:       "Configure browser, AI, and agent skills",
-		Long: `Interactive setup for the local browser, AI settings file, and agent skills.
+		Long: `Interactive setup for AI settings, agent skills, and the local browser.
 
 Sections can be run on their own: vibium setup browser|ai|skills.
-On a terminal, setup always prompts for AI in this run.
---non-interactive skips prompts only when stdin is not a TTY (CI, agents).
+Prompts come first; the browser install runs after them.
+--non-interactive never prompts (CI, agents).
 --quick fills only what is missing.
 After the selected sections, setup runs the matching vibium ready checks.
 This process uses the AI values immediately; later commands load empty AI
 variables from ai.env automatically.`,
 		Example: `  vibium setup
-  # Browser, AI, skills, then readiness. Prompts for AI on a terminal.
+  # AI, skills, browser, then readiness. Prompts on a terminal.
 
   vibium setup --non-interactive
-  # No prompts when stdin is not a TTY. On a terminal, still asks for AI.
+  # Never prompts; skips AI questions and leaves existing files alone.
 
   vibium setup --quick
   # Only fill what is missing.
@@ -74,22 +65,15 @@ variables from ai.env automatically.`,
 			runSetup(cmd, section, nonInteractive, quick)
 		},
 	}
-	cmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "Skip prompts when stdin is not a TTY")
+	cmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "Never prompt")
 	cmd.Flags().BoolVar(&quick, "quick", false, "Only fill what is missing")
 	return cmd
 }
 
 func runSetup(cmd *cobra.Command, section string, nonInteractive, quick bool) {
-	if jsonOutput {
-		browser.Progress = os.Stderr
-	}
-	// A human at a terminal configures AI in this run. --non-interactive
-	// skips prompts only when stdin is not a TTY (CI, agents). --json never prompts.
-	tty := inputIsTTY(cmd)
-	interactive := !jsonOutput && tty
-	if nonInteractive && !tty {
-		interactive = false
-	}
+	// Prompts require a real terminal; --non-interactive and --json never
+	// prompt even on one, so agent harnesses with a PTY cannot hang here.
+	interactive := !jsonOutput && !nonInteractive && inputIsTTY(cmd)
 	ui := newSetupUI(cmd, interactive)
 	ui.banner()
 
@@ -107,11 +91,9 @@ func runSetup(cmd *cobra.Command, section string, nonInteractive, quick bool) {
 		want = map[string]bool{section: true}
 	}
 
+	// Prompt-driven sections run first so all questions land before the
+	// browser download; the user can leave once the prompts are done.
 	result := setupCommandResult{}
-	if want["browser"] {
-		ui.heading("Browser")
-		result.Sections = append(result.Sections, setupBrowser(cmd, ui, quick))
-	}
 	if want["ai"] {
 		ui.heading("AI")
 		result.Sections = append(result.Sections, setupAI(cmd, ui, quick))
@@ -119,6 +101,10 @@ func runSetup(cmd *cobra.Command, section string, nonInteractive, quick bool) {
 	if want["skills"] {
 		ui.heading("Skills")
 		result.Sections = append(result.Sections, setupSkills(cmd, ui, quick))
+	}
+	if want["browser"] {
+		ui.heading("Browser")
+		result.Sections = append(result.Sections, setupBrowser(cmd, ui, quick))
 	}
 
 	readyScope := "all"
@@ -274,6 +260,9 @@ func setupAI(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 	if modelDefault == "" && provider == "openai" {
 		modelDefault = "gpt-5.6-sol"
 	}
+	if modelDefault == "" && provider == "xai" {
+		modelDefault = "grok-4"
+	}
 	model, err := ui.prompt("Model", modelDefault)
 	if err != nil {
 		return setupSection{Name: "ai", Status: "failed", Message: err.Error()}
@@ -284,12 +273,16 @@ func setupAI(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 
 	credVar := verifier.Config{Provider: provider}.CredentialVariable()
 	existingKey := os.Getenv(credVar)
-	needsKey := provider == "openai" || provider == "anthropic" || provider == "google"
+	// Matches verifier.Config.Checks. When Grok subscription login lands,
+	// xai becomes key-or-login here rather than key-required.
+	needsKey := provider == "openai" || provider == "xai" || provider == "anthropic" || provider == "google"
 	key := existingKey
 	if needsKey || existingKey != "" {
 		label := credVar
 		if existingKey != "" {
 			label += " [saved]"
+		} else {
+			label += " (Enter to skip for now)"
 		}
 		entered, err := ui.promptSecret(label)
 		if err != nil {
@@ -314,7 +307,7 @@ func setupAI(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 	}
 
 	effort := ""
-	if provider == "openai" || provider == "openai-compatible" {
+	if provider == "openai" || provider == "xai" || provider == "openai-compatible" {
 		effort = os.Getenv("VIBIUM_AI_REASONING_EFFORT")
 		if effort == "" && provider == "openai" {
 			effort = "none"
@@ -395,11 +388,33 @@ func runSetupReadiness(cmd *cobra.Command, scope string) setupResult {
 	}
 	result := runReadiness(target, nil, probe)
 	if strings.TrimSpace(config.APIKey) == "" {
+		// A keyless run is the normal first pass, not a failure: setup just
+		// wrote ai.env without a key. Turn the credential complaint into the
+		// one remaining step instead of ending the wizard on FAILED.
+		shown := "~/.config/vibium/ai.env"
+		if p, err := aiEnvPath(); err == nil {
+			shown = tildePath(p)
+		}
+		cred := config.CredentialVariable()
 		for i, c := range result.Checks {
 			if c.Name == "provider" && c.Status == "passed" {
 				result.Checks[i].Status = "skipped"
 				result.Checks[i].Message = "No API key; provider was not contacted."
 			}
+			if c.Name == cred && c.Status == "failed" {
+				result.Checks[i].Status = "skipped"
+				result.Checks[i].Message = "No API key yet; add it to " + shown + "."
+				result.Checks[i].Fix = ""
+			}
+		}
+		failed := 0
+		for _, c := range result.Checks {
+			if c.Status == "failed" {
+				failed++
+			}
+		}
+		if !result.Ready && failed == 0 {
+			result.Summary = "Add your API key to " + shown + ", then run vibium ready ai."
 		}
 	}
 	return result
@@ -415,16 +430,15 @@ func parseProviderChoice(choice, fallback string) (string, error) {
 	if choice == "" {
 		return fallback, nil
 	}
-	if n := 0; len(choice) == 1 && choice[0] >= '1' && choice[0] <= '5' {
-		n = int(choice[0] - '0')
-		return setupProviders[n-1], nil
+	if len(choice) == 1 && choice[0] >= '1' && choice[0] < byte('1'+len(setupProviders)) {
+		return setupProviders[choice[0]-'1'], nil
 	}
 	for _, p := range setupProviders {
 		if choice == p {
 			return p, nil
 		}
 	}
-	return "", fmt.Errorf("unknown provider %q; choose openai, anthropic, google, openai-compatible, or local", choice)
+	return "", fmt.Errorf("unknown provider %q; choose %s", choice, strings.Join(setupProviders, ", "))
 }
 
 func writeAIEnv(path string, kv map[string]string) error {
@@ -441,7 +455,7 @@ func writeAIEnv(path string, kv map[string]string) error {
 	}
 	var b strings.Builder
 	b.WriteString("# Written by vibium setup. Mode 0600.\n")
-	order := []string{"VIBIUM_AI_PROVIDER", "VIBIUM_AI_MODEL", "VIBIUM_AI_BASE_URL", "VIBIUM_AI_REASONING_EFFORT", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY"}
+	order := []string{"VIBIUM_AI_PROVIDER", "VIBIUM_AI_MODEL", "VIBIUM_AI_BASE_URL", "VIBIUM_AI_REASONING_EFFORT", "OPENAI_API_KEY", "XAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY"}
 	written := map[string]bool{}
 	for _, k := range order {
 		if v, ok := kv[k]; ok {

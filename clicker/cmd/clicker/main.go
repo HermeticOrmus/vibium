@@ -172,7 +172,7 @@ func newRootCmd(progName string) (root, run *cobra.Command) {
 			if err := envfile.LoadAIEnv(); err != nil {
 				return err
 			}
-			if isReadyCommand(cmd) || isSetupCommand(cmd) {
+			if isReadyCommand(cmd) {
 				return nil
 			}
 			return applyGlobalFlags(cmd)

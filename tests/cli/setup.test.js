@@ -51,11 +51,38 @@ test('setup --non-interactive --json with a seeded browser cache returns an ok e
   assert.equal(result.code, 0, result.stdout + result.stderr);
   const body = JSON.parse(result.stdout);
   assert.equal(body.ok, true);
+  assert.deepEqual(body.result.sections.map(s => s.name), ['ai', 'skills', 'browser'],
+    'prompt-driven sections must run before the browser download');
   const sections = Object.fromEntries(body.result.sections.map(s => [s.name, s]));
   assert.equal(sections.browser.status, 'done');
   assert.equal(sections.ai.status, 'skipped');
   assert.equal(sections.skills.status, 'skipped');
   assert.equal(fs.existsSync(env.READY_LAUNCH_MARKER), false, 'launched a browser');
+});
+
+test('setup without an API key ends on the next step, not a failure', async t => {
+  const env = environment(t);
+  seedChrome(env);
+  const settings = path.join(env.HOME, '.config', 'vibium', 'ai.env');
+  fs.mkdirSync(path.dirname(settings), { recursive: true });
+  fs.writeFileSync(settings, 'export VIBIUM_AI_PROVIDER=openai\nexport VIBIUM_AI_MODEL=gpt-test\n', { mode: 0o600 });
+  const result = await run(env, ['setup', '--non-interactive', '--json']);
+  assert.equal(result.code, 0, result.stdout + result.stderr);
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.ok, true);
+  const cred = body.result.ready.checks.find(c => c.name === 'OPENAI_API_KEY');
+  assert.equal(cred.status, 'skipped');
+  assert.match(cred.message, /add it to .*ai\.env/);
+  assert.equal(body.result.ready.checks.filter(c => c.status === 'failed').length, 0);
+  assert.match(body.result.ready.summary, /Add your API key to .*ai\.env, then run vibium ready ai/);
+});
+
+test('setup rejects an unsupported channel instead of ignoring it', async t => {
+  const env = environment(t);
+  seedChrome(env);
+  const result = await run(env, ['setup', '--channel', 'bogus', '--non-interactive', '--json']);
+  assert.notEqual(result.code, 0);
+  assert.match(result.stdout + result.stderr, /unsupported channel "bogus"/);
 });
 
 test('setup does not overwrite an existing ai.env', async t => {
