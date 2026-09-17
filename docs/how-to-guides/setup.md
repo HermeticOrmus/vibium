@@ -60,7 +60,8 @@ Use `--engine` and `--channel` for the same selection as live commands.
 ## Readiness
 
 Setup finishes by running the matching `vibium ready` checks (files only for
-the browser; up to two model requests for AI when a key is present). Without
-an API key the credential check reads as skipped, and the summary names the
-one step left: add the key to `ai.env`, then run `vibium ready ai`. Use
-`--json` for one `{ok, result}` envelope with section statuses and paths.
+the browser; up to two model requests for AI when a key is present). A fully
+ready run ends with a first command to try. Without an API key the credential
+check reads as skipped, and the summary names the one step left: add the key
+to `ai.env`, then run `vibium ready ai`. Use `--json` for one `{ok, result}`
+envelope with section statuses and paths.

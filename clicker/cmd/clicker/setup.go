@@ -121,6 +121,10 @@ func runSetup(cmd *cobra.Command, section string, nonInteractive, quick bool) {
 		result.Ready = &ready
 		if !jsonOutput {
 			writeReadiness(cmd, ready)
+			if hint := setupTryHint(&ready); hint != "" {
+				ui.println("")
+				ui.ok("%s", hint)
+			}
 		}
 	}
 
@@ -430,6 +434,16 @@ func runSetupReadiness(cmd *cobra.Command, scope string) setupResult {
 func aiConfigValid() bool {
 	config, err := verifier.ConfigFromEnv()
 	return err == nil && config.Validate() == nil
+}
+
+// setupTryHint suggests a first command after a fully ready run. Run needs
+// working AI, so the hint only appears when the AI checks passed too; a
+// keyless run already ends with its own next step.
+func setupTryHint(ready *setupResult) string {
+	if ready == nil || !ready.Ready || !aiConfigValid() {
+		return ""
+	}
+	return `Try: vibium run "open example.com and describe the page"`
 }
 
 func parseProviderChoice(choice, fallback string) (string, error) {

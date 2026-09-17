@@ -165,6 +165,25 @@ func TestWriteAIEnvModeAndBackup(t *testing.T) {
 	}
 }
 
+func TestSetupTryHintOnlyWhenFullyReady(t *testing.T) {
+	setupTestEnv(t)
+	if setupTryHint(nil) != "" {
+		t.Fatal("hint without readiness")
+	}
+	if setupTryHint(&setupResult{Ready: true}) != "" {
+		t.Fatal("hint without AI configuration")
+	}
+	t.Setenv("VIBIUM_AI_PROVIDER", "openai")
+	t.Setenv("VIBIUM_AI_MODEL", "gpt-test")
+	t.Setenv("OPENAI_API_KEY", "k")
+	if setupTryHint(&setupResult{Ready: false}) != "" {
+		t.Fatal("hint on a not-ready run")
+	}
+	if hint := setupTryHint(&setupResult{Ready: true}); !strings.Contains(hint, "vibium run") {
+		t.Fatalf("hint: %q", hint)
+	}
+}
+
 func TestParseProviderChoice(t *testing.T) {
 	// Digits map onto setupProviders; the accepted range must follow the
 	// list so adding a provider never silently truncates the menu.
