@@ -40,13 +40,15 @@ func TestRecordingCredentialRedaction(t *testing.T) {
 
 func TestRecordingRedactsEarlierObservationsAndOmitsSensitiveVisuals(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "PROVIDER-KEY-SENTINEL")
+	t.Setenv("ANTHROPIC_API_KEY", "ANTHROPIC-KEY-SENTINEL")
+	t.Setenv("GOOGLE_API_KEY", "GOOGLE-KEY-SENTINEL")
 	r := NewRecorder()
 	r.Start(RecordingStartOptions{}, nil)
 	r.RegisterSecret("PASSWORD-SENTINEL")
 	r.mu.Lock()
 	r.events = append(r.events,
 		recordEvent{"type": "before", "callId": "call@1", "method": "vibium:element.fill", "params": map[string]interface{}{"value": "PASSWORD-SENTINEL"}},
-		recordEvent{"type": "after", "callId": "call@1", "result": map[string]interface{}{"status": "passed", "observation": "PASSWORD-SENTINEL and PROVIDER-KEY-SENTINEL and LATE-HEADER-SECRET"}},
+		recordEvent{"type": "after", "callId": "call@1", "result": map[string]interface{}{"status": "passed", "observation": "PASSWORD-SENTINEL and PROVIDER-KEY-SENTINEL and ANTHROPIC-KEY-SENTINEL and GOOGLE-KEY-SENTINEL and LATE-HEADER-SECRET"}},
 	)
 	r.network = append(r.network, recordEvent{"type": "resource-snapshot", "snapshot": map[string]interface{}{"request": map[string]interface{}{"headers": []interface{}{map[string]interface{}{"name": "X-API-Key", "value": "LATE-HEADER-SECRET"}}}}})
 	r.omitVisuals = true
@@ -68,7 +70,7 @@ func TestRecordingRedactsEarlierObservationsAndOmitsSensitiveVisuals(t *testing.
 		reader, _ := file.Open()
 		contents, _ := io.ReadAll(reader)
 		reader.Close()
-		for _, secret := range []string{"PASSWORD-SENTINEL", "PROVIDER-KEY-SENTINEL", "LATE-HEADER-SECRET", "SECRET-IMAGE", "SECRET-DOM"} {
+		for _, secret := range []string{"PASSWORD-SENTINEL", "PROVIDER-KEY-SENTINEL", "ANTHROPIC-KEY-SENTINEL", "GOOGLE-KEY-SENTINEL", "LATE-HEADER-SECRET", "SECRET-IMAGE", "SECRET-DOM"} {
 			if bytes.Contains(contents, []byte(secret)) {
 				t.Fatalf("%s leaked %s", file.Name, secret)
 			}
