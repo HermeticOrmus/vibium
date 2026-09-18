@@ -490,13 +490,17 @@ jobs:
   # Publishes the GitHub prerelease once the bundle has passed local-smoke.
   # With registries enabled, public-smoke must also pass first; with them
   # parked (skipped), the release ships on the strength of local-smoke alone.
+  # A skipped public-smoke counts only while registries are parked: with them
+  # enabled, a failed publish leg skips public-smoke and must block promotion
+  # rather than ship a build whose public installs were never exercised.
   promote:
     needs: [select, local-smoke, draft-release, public-smoke]
     if: >-
       !cancelled() &&
       needs.local-smoke.result == 'success' &&
       needs.draft-release.result == 'success' &&
-      (needs.public-smoke.result == 'success' || needs.public-smoke.result == 'skipped')
+      (needs.public-smoke.result == 'success' ||
+        (needs.public-smoke.result == 'skipped' && vars.NIGHTLY_PUBLISH_REGISTRIES != 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: nightly
