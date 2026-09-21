@@ -275,10 +275,6 @@ func (r *Router) captureScreenshotForRecording(session *BrowserSession, opts Rec
 		return "", "", err
 	}
 
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		return "", "", bidiErr
-	}
-
 	var ssResult struct {
 		Result struct {
 			Data string `json:"data"`
@@ -344,10 +340,6 @@ func (r *Router) captureActionSnapshot(session *BrowserSession, recorder *Record
 	opts := recorder.Options()
 	resp, err := r.sendInternalCommandWithTimeout(session, "browsingContext.captureScreenshot", ScreenshotParams(context, opts), 2*time.Second)
 	if err != nil {
-		return ""
-	}
-
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
 		return ""
 	}
 
@@ -446,11 +438,6 @@ func CaptureRecordingScreenshot(s Session, recorder *Recorder, actionEnd time.Ti
 	if err != nil {
 		// Swallowing this is what let a 5s stall go unnoticed for months (#289).
 		log.Debug("recording screenshot failed", "context", context, "error", err)
-		return
-	}
-
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		log.Debug("recording screenshot returned an error", "context", context, "error", bidiErr)
 		return
 	}
 

@@ -66,9 +66,6 @@ func StartRecordingVideo(s Session, recorder *Recorder, opts RecordingStartOptio
 	if err != nil {
 		return fail(videoSupportError(err))
 	}
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		return fail(videoSupportError(bidiErr))
-	}
 
 	var result struct {
 		Result struct {
@@ -131,10 +128,6 @@ func StopRecordingVideo(s Session, recorder *Recorder) {
 	}, stopScreencastTimeout)
 	if err != nil {
 		recorder.FinishVideo("", err.Error())
-		return
-	}
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		recorder.FinishVideo("", bidiErr.Error())
 		return
 	}
 

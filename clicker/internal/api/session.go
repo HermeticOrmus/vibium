@@ -12,10 +12,10 @@ import (
 // and the MCP server (direct bidi.Client) can share the same browser-automation
 // logic. All shared standalone functions (Navigate, Click, etc.) accept a Session.
 type Session interface {
-	// SendBidiCommand sends a BiDi command and returns the full response JSON.
-	// The response format matches the proxy's sendInternalCommand output:
-	//   {"result": { ... }}   (success)
-	//   {"type":"error", "error":"...", "message":"..."}  (error)
+	// SendBidiCommand sends a BiDi command and returns the full response JSON,
+	// shaped {"result": { ... }}. An engine-level rejection is returned as a
+	// Go error on both transports (#509), never as an error envelope in the
+	// response.
 	SendBidiCommand(method string, params map[string]interface{}) (json.RawMessage, error)
 
 	// SendBidiCommandWithTimeout is like SendBidiCommand but with a custom timeout.
@@ -76,9 +76,9 @@ func (p *APISession) SetLastElementBox(box *BoxInfo) {
 // ---------------------------------------------------------------------------
 
 // AgentSession wraps a bidi.Client so that shared standalone functions can send
-// BiDi commands through the Session interface. The bidi.Client already handles
-// error responses as Go errors, so checkBidiError on wrapped responses is a
-// safe no-op.
+// BiDi commands through the Session interface. The bidi.Client reports error
+// responses as Go errors, the same contract sendInternalCommand keeps for the
+// proxy transport.
 type AgentSession struct {
 	Client   *bidi.Client
 	Context  string             // optional explicit context override (active tab)

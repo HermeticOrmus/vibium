@@ -384,11 +384,6 @@ func (r *Router) handleVibiumElScreenshot(session *BrowserSession, cmd bidiComma
 		return
 	}
 
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
-		return
-	}
-
 	var ssResult struct {
 		Result struct {
 			Data string `json:"data"`
@@ -1101,11 +1096,6 @@ func (r *Router) handlePageEval(session *BrowserSession, cmd bidiCommand) {
 		return
 	}
 
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
-		return
-	}
-
 	value, err := deserializeScriptResult(resp)
 	if err != nil {
 		r.sendError(session, cmd.ID, fmt.Errorf("eval failed: %w", err))
@@ -1283,10 +1273,6 @@ func (r *Router) handlePageExpose(session *BrowserSession, cmd bidiCommand) {
 	})
 	if err != nil {
 		r.sendError(session, cmd.ID, err)
-		return
-	}
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
 		return
 	}
 
