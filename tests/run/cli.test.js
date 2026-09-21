@@ -65,7 +65,10 @@ for (const provider of ['openai', 'xai', 'anthropic', 'google', 'openai-compatib
 for (const state of [{}, { incomplete: true }, { error: true }, { keepOpen: true }, { keepOpen: true, error: true }, { existing: true, error: true }, { existing: true, privacy: true }]) test(`Run ownership and evidence ${JSON.stringify(state)}`, { timeout: 120000 }, t => run(t, state));
 test('Run rejects archive/report flags and requires shared AI configuration', async () => {
   // Old per-feature variables must not silently configure the shared model loop.
+  // An empty provider makes run load ai.env, so point the config dir at an
+  // empty temp dir; otherwise the host's real ai.env configures the loop.
+  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-noai-'));
   for (const args of [['run', 'goal', '-i', 'record.zip'], ['run', 'goal', '--report', 'result.json'], ['run', 'goal']]) {
-    await assert.rejects(exec(VIBIUM, args, { env: { ...process.env, VIBIUM_AI_PROVIDER: '', VIBIUM_AI_MODEL: '', VIBIUM_VERIFIER_PROVIDER: 'openai', VIBIUM_PERFORM_MODEL: 'should-not-be-used' } }), e => /unknown (shorthand )?flag|VIBIUM_AI_PROVIDER/.test(e.stderr));
+    await assert.rejects(exec(VIBIUM, args, { env: { ...process.env, VIBIUM_CONFIG_DIR: configDir, VIBIUM_AI_PROVIDER: '', VIBIUM_AI_MODEL: '', VIBIUM_VERIFIER_PROVIDER: 'openai', VIBIUM_PERFORM_MODEL: 'should-not-be-used' } }), e => /unknown (shorthand )?flag|VIBIUM_AI_PROVIDER/.test(e.stderr));
   }
 });

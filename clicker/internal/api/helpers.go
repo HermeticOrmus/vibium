@@ -39,6 +39,8 @@ func (r *Router) evalSimpleScript(session *BrowserSession, context, fn string) (
 
 // checkBidiError checks if a BiDi response is an error and returns it.
 // BiDi error responses have: { "type": "error", "error": "...", "message": "..." }
+// Called once, inside sendInternalCommandWithTimeout: every internal command
+// gets the check there, so call sites must not need their own (#509).
 func checkBidiError(resp json.RawMessage) error {
 	var errResp struct {
 		Type    string `json:"type"`

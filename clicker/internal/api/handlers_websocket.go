@@ -96,10 +96,6 @@ func (r *Router) handlePageOnWebSocket(session *BrowserSession, cmd bidiCommand)
 			r.sendError(session, cmd.ID, err)
 			return
 		}
-		if bidiErr := checkBidiError(resp); bidiErr != nil {
-			r.sendError(session, cmd.ID, bidiErr)
-			return
-		}
 
 		var result struct {
 			Result struct {

@@ -86,12 +86,9 @@ func (r *Router) handleBrowserNewPage(session *BrowserSession, cmd bidiCommand) 
 // creation: some Firefox configurations reject browsingContext.activate as
 // privileged (see launcher_firefox.go).
 func (r *Router) activateNewPage(session *BrowserSession, context string) {
-	resp, err := r.sendInternalCommand(session, "browsingContext.activate", map[string]interface{}{
+	_, err := r.sendInternalCommand(session, "browsingContext.activate", map[string]interface{}{
 		"context": context,
 	})
-	if err == nil {
-		err = checkBidiError(resp)
-	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[router] newPage: created %s but could not raise it: %v\n", context, err)
 	}
@@ -371,11 +368,8 @@ func SetViewport(s Session, context string, width, height int, dpr float64) erro
 	if dpr > 0 {
 		params["devicePixelRatio"] = dpr
 	}
-	resp, err := s.SendBidiCommand("browsingContext.setViewport", params)
-	if err != nil {
-		return err
-	}
-	return checkBidiError(resp)
+	_, err := s.SendBidiCommand("browsingContext.setViewport", params)
+	return err
 }
 
 // SetContent sets the page HTML content.
@@ -464,7 +458,7 @@ func Upload(s Session, context string, ep ElementParams, files []string, remote 
 		return err
 	}
 
-	resp, err := s.SendBidiCommand("input.setFiles", map[string]interface{}{
+	_, err = s.SendBidiCommand("input.setFiles", map[string]interface{}{
 		"context": context,
 		"element": map[string]interface{}{
 			"sharedId": sharedID,
@@ -479,7 +473,7 @@ func Upload(s Session, context string, ep ElementParams, files []string, remote 
 	// is an error, so without this the proxy answered "set": true for a
 	// file the browser refused and every client built on it reported
 	// success (#481). Through AgentSession this is a safe no-op.
-	return checkBidiError(resp)
+	return nil
 }
 
 // MouseMove moves the mouse to the given coordinates.

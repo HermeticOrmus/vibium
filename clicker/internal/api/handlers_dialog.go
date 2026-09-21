@@ -69,13 +69,10 @@ func (s *BrowserSession) autoDismissContext(msg string) string {
 // usual failure is benign — the prompt was already closed by a racing command —
 // but it is still logged, so a dialog that stays stuck names its cause.
 func (r *Router) dismissUnhandledPrompt(session *BrowserSession, context string) {
-	resp, err := r.sendInternalCommand(session, "browsingContext.handleUserPrompt", map[string]interface{}{
+	_, err := r.sendInternalCommand(session, "browsingContext.handleUserPrompt", map[string]interface{}{
 		"context": context,
 		"accept":  false,
 	})
-	if err == nil {
-		err = checkBidiError(resp)
-	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[router] auto-dismiss of prompt in context %s failed for client %d: %v\n",
 			context, session.Client.ID(), err)
@@ -99,14 +96,9 @@ func (r *Router) handleDialogAccept(session *BrowserSession, cmd bidiCommand) {
 		params["userText"] = userText
 	}
 
-	resp, err := r.sendInternalCommand(session, "browsingContext.handleUserPrompt", params)
+	_, err = r.sendInternalCommand(session, "browsingContext.handleUserPrompt", params)
 	if err != nil {
 		r.sendError(session, cmd.ID, err)
-		return
-	}
-
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
 		return
 	}
 
@@ -126,14 +118,9 @@ func (r *Router) handleDialogDismiss(session *BrowserSession, cmd bidiCommand) {
 		"accept":  false,
 	}
 
-	resp, err := r.sendInternalCommand(session, "browsingContext.handleUserPrompt", params)
+	_, err = r.sendInternalCommand(session, "browsingContext.handleUserPrompt", params)
 	if err != nil {
 		r.sendError(session, cmd.ID, err)
-		return
-	}
-
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
 		return
 	}
 
@@ -154,11 +141,8 @@ func DialogAccept(s Session, context, userText string) error {
 		params["userText"] = userText
 	}
 
-	resp, err := s.SendBidiCommand("browsingContext.handleUserPrompt", params)
-	if err != nil {
-		return err
-	}
-	return checkBidiError(resp)
+	_, err := s.SendBidiCommand("browsingContext.handleUserPrompt", params)
+	return err
 }
 
 // DialogDismiss dismisses a user prompt.
@@ -168,9 +152,6 @@ func DialogDismiss(s Session, context string) error {
 		"accept":  false,
 	}
 
-	resp, err := s.SendBidiCommand("browsingContext.handleUserPrompt", params)
-	if err != nil {
-		return err
-	}
-	return checkBidiError(resp)
+	_, err := s.SendBidiCommand("browsingContext.handleUserPrompt", params)
+	return err
 }
