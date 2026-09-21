@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -94,17 +95,26 @@ func runSetup(cmd *cobra.Command, section string, nonInteractive, quick bool) {
 	// Prompt-driven sections run first so all questions land before the
 	// browser download; the user can leave once the prompts are done.
 	result := setupCommandResult{}
+	// A cancelled section means the user hit Ctrl-C in a prompt: stop the
+	// wizard quietly instead of reporting a failure.
+	addSection := func(s setupSection) {
+		result.Sections = append(result.Sections, s)
+		if s.Status == "cancelled" {
+			fmt.Fprintln(cmd.ErrOrStderr(), "Setup cancelled.")
+			os.Exit(1)
+		}
+	}
 	if want["ai"] {
 		ui.heading("AI")
-		result.Sections = append(result.Sections, setupAI(cmd, ui, quick))
+		addSection(setupAI(cmd, ui, quick))
 	}
 	if want["skills"] {
 		ui.heading("Skills")
-		result.Sections = append(result.Sections, setupSkills(cmd, ui, quick))
+		addSection(setupSkills(cmd, ui, quick))
 	}
 	if want["browser"] {
 		ui.heading("Browser")
-		result.Sections = append(result.Sections, setupBrowser(cmd, ui, quick))
+		addSection(setupBrowser(cmd, ui, quick))
 	}
 
 	readyScope := "all"
@@ -242,23 +252,17 @@ func setupAI(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 		provider = "openai"
 	}
 	ui.println("%s", maybePaint(ui.useColor(), brandText, "Configure AI for run and check now."))
-	ui.println("%s", maybePaint(ui.useColor(), brandText, "AI provider:"))
-	defIdx := 1
+	defIdx := 0
 	for i, p := range setupProviders {
-		num := maybePaint(ui.useColor(), brandAccent, fmt.Sprintf("%d)", i+1))
-		ui.println("  %s %s", num, p)
 		if p == provider {
-			defIdx = i + 1
+			defIdx = i
 		}
 	}
-	choice, err := ui.prompt("Provider", fmt.Sprintf("%d", defIdx))
+	idx, err := ui.selectOne("Provider", providerOptions(), defIdx)
 	if err != nil {
-		return setupSection{Name: "ai", Status: "failed", Message: err.Error()}
+		return aiSectionError(err)
 	}
-	provider, err = parseProviderChoice(choice, provider)
-	if err != nil {
-		return setupSection{Name: "ai", Status: "failed", Message: err.Error()}
-	}
+	provider = setupProviders[idx]
 
 	modelDefault := os.Getenv("VIBIUM_AI_MODEL")
 	if modelDefault == "" && provider == "openai" {
@@ -267,9 +271,16 @@ func setupAI(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 	if modelDefault == "" && provider == "xai" {
 		modelDefault = "grok-4"
 	}
-	model, err := ui.prompt("Model", modelDefault)
-	if err != nil {
-		return setupSection{Name: "ai", Status: "failed", Message: err.Error()}
+	var model string
+	for tries := 0; tries < 3; tries++ {
+		model, err = ui.prompt("Model", modelDefault)
+		if err != nil {
+			return aiSectionError(err)
+		}
+		if strings.TrimSpace(model) != "" {
+			break
+		}
+		ui.println("A model is required.")
 	}
 	if strings.TrimSpace(model) == "" {
 		return setupSection{Name: "ai", Status: "failed", Message: "A model is required."}
@@ -340,22 +351,47 @@ func setupAI(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 }
 
 func setupSkills(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
-	agent, present := setupSkillAgent()
-	if !ui.interactive && !present {
+	found := setupSkillAgentList()
+	if !ui.interactive && len(found) == 0 {
 		ui.skip("Skipped skills: no ~/.grok or ~/.claude directory.")
 		return setupSection{Name: "skills", Status: "skipped", Message: "No ~/.grok or ~/.claude directory; skills were not installed."}
 	}
-	if !present {
-		agent = defaultSkillAgent()
+	targets := found
+	if len(targets) == 0 {
+		targets = []string{defaultSkillAgent()}
 	}
-	if quick && skillsPresent(agent) {
-		ui.skip("Skills already installed for %s; skipping (--quick).", agent)
-		return setupSection{Name: "skills", Status: "skipped", Message: "Skills already installed.", Agent: agent}
-	}
-	if ui.interactive {
-		ok, err := ui.confirm(fmt.Sprintf("Install browser and check skills for %s?", agent), true)
+	if quick {
+		var missing []string
+		for _, a := range targets {
+			if !skillsPresent(a) {
+				missing = append(missing, a)
+			}
+		}
+		if len(missing) == 0 {
+			agent := strings.Join(targets, ",")
+			ui.skip("Skills already installed for %s; skipping (--quick).", agent)
+			return setupSection{Name: "skills", Status: "skipped", Message: "Skills already installed.", Agent: agent}
+		}
+		targets = missing
+	} else if ui.interactive && len(found) > 1 {
+		opts := make([]selectOption, 0, len(found)+1)
+		for _, a := range found {
+			opts = append(opts, selectOption{value: a})
+		}
+		opts = append(opts, selectOption{value: "both"})
+		idx, err := ui.selectOne("Install skills for", opts, 0)
 		if err != nil {
-			return setupSection{Name: "skills", Status: "failed", Message: err.Error(), Agent: agent}
+			return skillsSectionError(err, strings.Join(found, ","))
+		}
+		if opts[idx].value != "both" {
+			targets = []string{opts[idx].value}
+		}
+	}
+	agent := strings.Join(targets, ",")
+	if ui.interactive {
+		ok, err := ui.confirm(fmt.Sprintf("Install browser and check skills for %s?", strings.Join(targets, " and ")), true)
+		if err != nil {
+			return skillsSectionError(err, agent)
 		}
 		if !ok {
 			ui.skip("Skipped skills.")
@@ -364,15 +400,24 @@ func setupSkills(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 	}
 
 	var paths []string
-	for _, name := range []string{"browser", "check"} {
-		dir, skillPath, err := setupWriteSkill(name, agent)
-		if err != nil {
-			return setupSection{Name: "skills", Status: "failed", Message: err.Error(), Agent: agent, Paths: paths}
+	for _, target := range targets {
+		for _, name := range []string{"browser", "check"} {
+			dir, skillPath, err := setupWriteSkill(name, target)
+			if err != nil {
+				return setupSection{Name: "skills", Status: "failed", Message: err.Error(), Agent: agent, Paths: paths}
+			}
+			paths = append(paths, skillPath)
+			ui.ok("Installed %s skill to %s.", name, dir)
 		}
-		paths = append(paths, skillPath)
-		ui.ok("Installed %s skill to %s.", name, dir)
 	}
 	return setupSection{Name: "skills", Status: "done", Message: "Installed browser and check skills.", Agent: agent, Paths: paths}
+}
+
+func skillsSectionError(err error, agent string) setupSection {
+	if errors.Is(err, errSetupCancelled) {
+		return setupSection{Name: "skills", Status: "cancelled", Message: "Setup cancelled.", Agent: agent}
+	}
+	return setupSection{Name: "skills", Status: "failed", Message: err.Error(), Agent: agent}
 }
 
 func runSetupReadiness(cmd *cobra.Command, scope string) setupResult {
@@ -446,20 +491,30 @@ func setupTryHint(ready *setupResult) string {
 	return `Try: vibium run "open example.com and describe the page"`
 }
 
-func parseProviderChoice(choice, fallback string) (string, error) {
-	choice = strings.TrimSpace(strings.ToLower(choice))
-	if choice == "" {
-		return fallback, nil
-	}
-	if len(choice) == 1 && choice[0] >= '1' && choice[0] < byte('1'+len(setupProviders)) {
-		return setupProviders[choice[0]-'1'], nil
-	}
-	for _, p := range setupProviders {
-		if choice == p {
-			return p, nil
+// providerOptions annotates the providers whose extra requirements are not
+// obvious from the name; the key-required ones stay plain.
+func providerOptions() []selectOption {
+	opts := make([]selectOption, len(setupProviders))
+	for i, p := range setupProviders {
+		hint := ""
+		switch p {
+		case "openai-compatible":
+			hint = "needs base URL"
+		case "local":
+			hint = "no API key, needs base URL"
 		}
+		opts[i] = selectOption{value: p, hint: hint}
 	}
-	return "", fmt.Errorf("unknown provider %q; choose %s", choice, strings.Join(setupProviders, ", "))
+	return opts
+}
+
+// aiSectionError maps a prompt error onto the AI section, keeping user
+// cancels distinct from real failures.
+func aiSectionError(err error) setupSection {
+	if errors.Is(err, errSetupCancelled) {
+		return setupSection{Name: "ai", Status: "cancelled", Message: "Setup cancelled."}
+	}
+	return setupSection{Name: "ai", Status: "failed", Message: err.Error()}
 }
 
 func writeAIEnv(path string, kv map[string]string) error {
@@ -525,18 +580,18 @@ func defaultSkillAgent() string {
 	return "claude"
 }
 
-func setupSkillAgent() (string, bool) {
+func setupSkillAgentList() []string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", false
+		return nil
 	}
-	if isDir(filepath.Join(home, ".grok")) {
-		return "grok", true
+	var agents []string
+	for _, a := range []string{"grok", "claude"} {
+		if isDir(filepath.Join(home, "."+a)) {
+			agents = append(agents, a)
+		}
 	}
-	if isDir(filepath.Join(home, ".claude")) {
-		return "claude", true
-	}
-	return "", false
+	return agents
 }
 
 func aiEnvPath() (string, error) {

@@ -184,27 +184,28 @@ func TestSetupTryHintOnlyWhenFullyReady(t *testing.T) {
 	}
 }
 
-func TestParseProviderChoice(t *testing.T) {
+func TestParseSelectChoice(t *testing.T) {
 	// Digits map onto setupProviders; the accepted range must follow the
 	// list so adding a provider never silently truncates the menu.
+	opts := providerOptions()
 	for i, want := range setupProviders {
-		got, err := parseProviderChoice(string(rune('1'+i)), "openai")
-		if err != nil || got != want {
-			t.Fatalf("choice %d: got %q %v", i+1, got, err)
+		got, err := parseSelectChoice(string(rune('1'+i)), opts)
+		if err != nil || setupProviders[got] != want {
+			t.Fatalf("choice %d: got %d %v", i+1, got, err)
 		}
 	}
-	got, err := parseProviderChoice("2", "openai")
-	if err != nil || got != "xai" {
-		t.Fatalf("got %q %v", got, err)
+	got, err := parseSelectChoice("2", opts)
+	if err != nil || setupProviders[got] != "xai" {
+		t.Fatalf("got %d %v", got, err)
 	}
-	got, err = parseProviderChoice("local", "openai")
-	if err != nil || got != "local" {
-		t.Fatalf("got %q %v", got, err)
+	got, err = parseSelectChoice("local", opts)
+	if err != nil || setupProviders[got] != "local" {
+		t.Fatalf("got %d %v", got, err)
 	}
-	if _, err := parseProviderChoice(string(rune('1'+len(setupProviders))), "openai"); err == nil {
+	if _, err := parseSelectChoice(string(rune('1'+len(setupProviders))), opts); err == nil {
 		t.Fatal("accepted digit past the menu")
 	}
-	if _, err := parseProviderChoice("nope", "openai"); err == nil {
+	if _, err := parseSelectChoice("nope", opts); err == nil {
 		t.Fatal("accepted unknown provider")
 	}
 }
