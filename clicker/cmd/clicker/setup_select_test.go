@@ -159,9 +159,9 @@ func TestSelectOneRepromptsOnBadInput(t *testing.T) {
 func TestSetupAIRepromptsForEmptyModel(t *testing.T) {
 	setupTestEnv(t)
 	jsonOutput = false
-	// anthropic has no model default, so the empty answer re-prompts; the
-	// last empty line skips the API key.
-	in := bytes.NewBufferString("3\n\nreal-model\n\n")
+	// openai-compatible has no model default, so the empty answer
+	// re-prompts; the last empty line leaves the base URL unset.
+	in := bytes.NewBufferString("5\n\nreal-model\n\n")
 	ui := &setupUI{in: in, out: ioDiscard(), err: ioDiscard(), interactive: true}
 	sec := setupAI(&cobra.Command{}, ui, false)
 	if sec.Status != "done" {

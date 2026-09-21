@@ -271,6 +271,12 @@ func setupAI(cmd *cobra.Command, ui *setupUI, quick bool) setupSection {
 	if modelDefault == "" && provider == "xai" {
 		modelDefault = "grok-4"
 	}
+	if modelDefault == "" && provider == "anthropic" {
+		modelDefault = "claude-sonnet-4-6"
+	}
+	if modelDefault == "" && provider == "google" {
+		modelDefault = "gemini-2.5-flash"
+	}
 	var model string
 	for tries := 0; tries < 3; tries++ {
 		model, err = ui.prompt("Model", modelDefault)
