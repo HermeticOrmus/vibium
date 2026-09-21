@@ -12,6 +12,7 @@ import (
 
 type setupUI struct {
 	in          io.Reader
+	reader      *bufio.Reader
 	out         io.Writer
 	err         io.Writer
 	interactive bool
@@ -78,7 +79,7 @@ func (ui *setupUI) prompt(label, def string) (string, error) {
 	} else {
 		fmt.Fprintf(ui.out, "%s: ", label)
 	}
-	line, err := readLine(ui.in)
+	line, err := ui.readLine()
 	if err != nil {
 		return "", err
 	}
@@ -97,7 +98,7 @@ func (ui *setupUI) promptSecret(label string) (string, error) {
 	if f, ok := ui.in.(*os.File); ok {
 		restore = disableEcho(f)
 	}
-	line, err := readLine(ui.in)
+	line, err := ui.readLine()
 	restore()
 	fmt.Fprintln(ui.out)
 	return line, err
@@ -119,8 +120,13 @@ func (ui *setupUI) confirm(label string, defYes bool) (bool, error) {
 	return ans == "y" || ans == "yes", nil
 }
 
-func readLine(r io.Reader) (string, error) {
-	s, err := bufio.NewReader(r).ReadString('\n')
+// readLine shares one buffered reader across prompts so input arriving in a
+// single read (a multi-line paste, piped answers) survives to later prompts.
+func (ui *setupUI) readLine() (string, error) {
+	if ui.reader == nil {
+		ui.reader = bufio.NewReader(ui.in)
+	}
+	s, err := ui.reader.ReadString('\n')
 	if err != nil && err != io.EOF {
 		return "", err
 	}
