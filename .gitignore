@@ -109,3 +109,10 @@ packages/python/*/src/*/bin/vibium.exe
 
 # Per-process capability counts collected during a test run
 tests/.capability-summary/
+
+# Output of the vibe-check demo commands. README.md and the slides tell the
+# reader to run `record start -o flow.zip` in that folder, so following them
+# leaves capture output in the working tree. The recordings the slides cite
+# live in assets/ and stay tracked.
+docs/presentations/vibe-check/flow*
+docs/presentations/vibe-check/verdict*.json
