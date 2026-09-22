@@ -184,7 +184,7 @@ install-browser: build-go
 
 # Install Firefox (optional locally — the Firefox tests self-skip without it).
 # CI runs this so those tests actually execute. Channel comes from
-# VIBIUM_ENGINE_CHANNEL (beta until Firefox 154 reaches stable).
+# VIBIUM_ENGINE_CHANNEL; unset means release, which carries video since 154.
 install-firefox: build-go
 	./clicker/bin/vibium$(EXE) install --engine firefox
 

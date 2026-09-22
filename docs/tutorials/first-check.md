@@ -46,10 +46,11 @@ export VIBIUM_AI_REASONING_EFFORT=none
 export OPENAI_API_KEY='replace-with-your-api-key'
 ```
 
-Use a model your API account can access. This model uses `none` for tool calls;
-other models may use different settings. Keep `export` on each line so the
-settings reach Vibium, and keep your actual key in the file rather than chat
-or project source code.
+Use a model your API account can access. `VIBIUM_AI_REASONING_EFFORT=none` is
+the right setting for this model; other OpenAI models may want a different
+value, and Anthropic and Google models want it left unset. Keep `export` on
+each line so the settings reach Vibium, and keep your actual key in the file
+rather than chat or project source code.
 
 Then run readiness in any terminal:
 
@@ -114,19 +115,20 @@ Keep `sitecheck.zip` for Part 3.
 
 ## Optional: include video with Firefox
 
-Once the browser from this exercise is closed, use Firefox beta for this
-development build's video example:
+Once the browser from this exercise is closed, run the same check on Firefox
+to get video:
 
 ```bash
-vibium install --engine firefox --channel beta
-vibium check "https://var.parts is up" -o sitecheck-firefox.zip --engine firefox --channel beta
+vibium install --engine firefox
+vibium check "https://var.parts is up" -o sitecheck-firefox.zip --engine firefox
 ```
 
 If you used `--keep-open`, close that browser with `vibium stop` before switching
 engines. An unrelated existing session should be preserved; finish this exercise
 in a separate session if needed.
 
-Firefox 154 or newer includes WebM video. Chrome currently records actions and
+Firefox records WebM video from version 154; the release channel is well past
+that, so no channel flag is needed. Chrome currently records actions and
 screenshots without continuous video. Record Player can play the video from
 your ZIP.
 
