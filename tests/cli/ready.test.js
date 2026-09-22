@@ -18,7 +18,10 @@ function environment(t, extra = {}) {
     VIBIUM_SESSION: 'ready-ai', VIBIUM_ENGINE: 'chrome', VIBIUM_ENGINE_PATH: '',
     VIBIUM_ENGINE_CHANNEL: '', VIBIUM_ENGINE_VERSION: '', VIBIUM_CONNECT_URL: '',
     VIBIUM_AI_PROVIDER: '', VIBIUM_AI_MODEL: '', OPENAI_API_KEY: '',
-    VIBIUM_AI_BASE_URL: '', VIBIUM_AI_REASONING_EFFORT: '', ...extra,
+    VIBIUM_AI_BASE_URL: '', VIBIUM_AI_REASONING_EFFORT: '',
+    // These cases own HOME and write their own ai.env, so they want the real
+    // loading behavior rather than the suite-wide opt-out in the Makefile.
+    VIBIUM_LOAD_AI_ENV: '', ...extra,
   };
 }
 async function run(env, args = ['ready', 'ai', '--json']) {
