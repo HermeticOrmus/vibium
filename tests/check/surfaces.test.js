@@ -8,7 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const exec = promisify(execFile);
 const root = path.resolve(__dirname, '../..');
-const { ENGINE } = require('../helpers');
+const { ENGINE, ENGINE_CHANNEL } = require('../helpers');
 const listen = s => new Promise(r => s.listen(0, '127.0.0.1', () => r(`http://127.0.0.1:${s.address().port}`)));
 
 test('Check SDK and MCP surfaces share the native runtime', { timeout: 300000 }, async t => {
@@ -50,7 +50,7 @@ test('Check SDK and MCP surfaces share the native runtime', { timeout: 300000 },
     if (req.url === '/other') { res.end('<h1>Other page</h1><input id="name" value="Other">'); return; }
     res.end(`<!doctype html><title>Account</title><h1>Account</h1><form><label>Display name<input id="name"></label><button>Save</button></form><script>const input=document.querySelector('input');input.value=localStorage.getItem('name')||'Original';document.querySelector('form').onsubmit=e=>{e.preventDefault();localStorage.setItem('name',input.value);console.log('Saved')};</script>`);
   });
-  const env = { ...process.env, VIBIUM_BIN_PATH: path.join(root, 'clicker/bin/vibium'), VIBIUM_CONNECT_URL: '', VIBIUM_ENGINE: ENGINE, VIBIUM_ENGINE_PATH: '', VIBIUM_ENGINE_CHANNEL: '', VIBIUM_AI_PROVIDER: 'openai-compatible', VIBIUM_AI_MODEL: 'fixture', OPENAI_API_KEY: 'fixture-secret', VIBIUM_AI_BASE_URL: `${await listen(provider)}/v1`, CHECK_TEST_URL: await listen(app), CHECK_TEST_INPUT: path.join(root, 'tests/fixtures/check/playwright-checkout.zip') };
+  const env = { ...process.env, VIBIUM_BIN_PATH: path.join(root, 'clicker/bin/vibium'), VIBIUM_CONNECT_URL: '', VIBIUM_ENGINE: ENGINE, VIBIUM_ENGINE_PATH: '', VIBIUM_ENGINE_CHANNEL: ENGINE_CHANNEL, VIBIUM_AI_PROVIDER: 'openai-compatible', VIBIUM_AI_MODEL: 'fixture', OPENAI_API_KEY: 'fixture-secret', VIBIUM_AI_BASE_URL: `${await listen(provider)}/v1`, CHECK_TEST_URL: await listen(app), CHECK_TEST_INPUT: path.join(root, 'tests/fixtures/check/playwright-checkout.zip') };
   try {
     const runners = [
       ['JavaScript async', process.execPath, [path.join(__dirname, 'sdk-js.cjs')], '0'],
