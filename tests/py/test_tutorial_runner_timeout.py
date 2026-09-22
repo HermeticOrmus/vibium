@@ -74,6 +74,36 @@ def test_sync_timeout_kills_leaked_vibium(short_timeout, tmp_path):
     _assert_terminated(int(pidfile.read_text()))
 
 
+def test_sync_timeout_kills_vibium_that_ignores_sigterm(short_timeout, tmp_path):
+    """A wedged vibium survives SIGTERM; the reaper must escalate.
+
+    Incident 15 (#397): the bound fired and SIGTERM went out, but vibium's
+    graceful shutdown blocked on the same wedged session, the process
+    lived on holding the pipes, and the phase watchdog killed pytest
+    before it could report.
+    """
+    import os
+
+    fake_vibium = tmp_path / "vibium"
+    os.symlink("/bin/sleep", fake_vibium)
+    pidfile = tmp_path / "pid"
+    # An ignored signal disposition survives exec, so sleep runs with
+    # SIGTERM ignored; the symlink keeps its ps name "vibium" (macOS
+    # renames interpreter and shebang children, so neither can fake it).
+    block = (
+        "import pathlib, signal, subprocess, time\n"
+        f"p = subprocess.Popen([{str(fake_vibium)!r}, '60'],\n"
+        "    preexec_fn=lambda: signal.signal(signal.SIGTERM, signal.SIG_IGN))\n"
+        f"pathlib.Path({str(pidfile)!r}).write_text(str(p.pid))\n"
+        "time.sleep(30)\n"
+    )
+
+    with pytest.raises(TimeoutError):
+        run_sync_standalone(block)
+
+    _assert_terminated(int(pidfile.read_text()))
+
+
 async def test_async_timeout_kills_leaked_vibium(short_timeout, tmp_path):
     import os
 
