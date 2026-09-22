@@ -9,7 +9,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { VIBIUM, ENGINE } = require('../helpers');
+const { VIBIUM, ENGINE, ENGINE_CHANNEL } = require('../helpers');
 const exec = promisify(execFile);
 const live = process.env.VIBIUM_CHECK_LIVE === '1';
 
@@ -24,7 +24,7 @@ async function acceptance(t, broken = false) {
   const output = path.join(dir, 'verification.zip');
   const report = path.join(dir, 'verdict.json');
   const claim = 'changing my display name persists after refresh';
-  const env = { ...process.env, VIBIUM_SESSION: session, VIBIUM_CONNECT_URL: '', VIBIUM_ENGINE: ENGINE, VIBIUM_ENGINE_PATH: '', VIBIUM_ENGINE_CHANNEL: ENGINE === 'firefox' ? 'beta' : '' };
+  const env = { ...process.env, VIBIUM_SESSION: session, VIBIUM_CONNECT_URL: '', VIBIUM_ENGINE: ENGINE, VIBIUM_ENGINE_PATH: '', VIBIUM_ENGINE_CHANNEL: ENGINE_CHANNEL };
   const cli = async (...args) => {
     const { stdout } = await exec(VIBIUM, ['--json', '--headless', ...args], { env, timeout: 230000, maxBuffer: 4 * 1024 * 1024 });
     const out = JSON.parse(stdout); assert.equal(out.ok, true); return out.result;
