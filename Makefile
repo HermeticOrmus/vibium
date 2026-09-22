@@ -184,7 +184,7 @@ install-browser: build-go
 
 # Install Firefox (optional locally — the Firefox tests self-skip without it).
 # CI runs this so those tests actually execute. Channel comes from
-# VIBIUM_ENGINE_CHANNEL (beta until Firefox 154 reaches stable).
+# VIBIUM_ENGINE_CHANNEL; unset means release, which carries video since 154.
 install-firefox: build-go
 	./clicker/bin/vibium$(EXE) install --engine firefox
 
@@ -199,6 +199,9 @@ deps:
 	@if [ ! -d "node_modules" ]; then npm install; fi
 
 # Start the proxy server
+# Empty is not "disabled" (only 0/false/no/off are), so this undoes the
+# suite-wide opt-out below for the one target that runs the binary for real.
+serve: export VIBIUM_LOAD_AI_ENV :=
 serve: build-go
 	./clicker/bin/vibium$(EXE) serve
 
@@ -272,6 +275,12 @@ mtlshim:
 	@mkdir -p $(dir $(MTLSHIM))
 	clang -fno-objc-arc -dynamiclib -framework Metal -framework Foundation \
 		-o $(MTLSHIM) scripts/mtlshim.m
+
+# The suite must see the same AI configuration CI does: none. Without this a
+# developer who has run `vibium setup` has a ~/.config/vibium/ai.env, and the
+# binary fills every empty VIBIUM_AI_* the tests set from it, so their provider
+# and reasoning effort reach runs the fixtures configured differently.
+export VIBIUM_LOAD_AI_ENV := 0
 
 # The full suite. CI runs the two halves below on separate runners to keep
 # wall time down (#513); locally this is still everything.

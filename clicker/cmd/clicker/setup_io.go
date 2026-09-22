@@ -2,16 +2,19 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 type setupUI struct {
 	in          io.Reader
+	reader      *bufio.Reader
 	out         io.Writer
 	err         io.Writer
 	interactive bool
@@ -78,7 +81,7 @@ func (ui *setupUI) prompt(label, def string) (string, error) {
 	} else {
 		fmt.Fprintf(ui.out, "%s: ", label)
 	}
-	line, err := readLine(ui.in)
+	line, err := ui.readLine()
 	if err != nil {
 		return "", err
 	}
@@ -93,17 +96,43 @@ func (ui *setupUI) promptSecret(label string) (string, error) {
 		return "", nil
 	}
 	fmt.Fprintf(ui.out, "%s: ", maybePaint(ui.useColor(), brandAccent, label))
-	restore := func() {}
-	if f, ok := ui.in.(*os.File); ok {
-		restore = disableEcho(f)
+	// A buffered paste already delivered the answer; echo is moot then.
+	pasted := ui.reader != nil && ui.reader.Buffered() > 0
+	if f, ok := ui.in.(*os.File); ok && !pasted && term.IsTerminal(int(f.Fd())) {
+		stop := guardSecret(ui, f)
+		b, err := term.ReadPassword(int(f.Fd()))
+		stop()
+		fmt.Fprintln(ui.out)
+		return string(b), err
 	}
-	line, err := readLine(ui.in)
-	restore()
+	line, err := ui.readLine()
 	fmt.Fprintln(ui.out)
 	return line, err
 }
 
 func (ui *setupUI) confirm(label string, defYes bool) (bool, error) {
+	if !ui.interactive {
+		return defYes, nil
+	}
+	if f, ok := ui.rawFile(); ok {
+		yes := defYes
+		err := ui.withRaw(f, func(br *bufio.Reader) (err error) {
+			yes, err = runToggle(br, ui.out, label, defYes, ui.useColor())
+			return err
+		})
+		if err == nil {
+			ans := "No"
+			if yes {
+				ans = "Yes"
+			}
+			ui.println("%s %s", maybePaint(ui.useColor(), brandAccent, label), ans)
+			return yes, nil
+		}
+		if errors.Is(err, errSetupCancelled) {
+			return false, err
+		}
+		// Raw mode failed underneath us; fall through to the typed prompt.
+	}
 	hint := "Y/n"
 	if !defYes {
 		hint = "y/N"
@@ -119,8 +148,13 @@ func (ui *setupUI) confirm(label string, defYes bool) (bool, error) {
 	return ans == "y" || ans == "yes", nil
 }
 
-func readLine(r io.Reader) (string, error) {
-	s, err := bufio.NewReader(r).ReadString('\n')
+// readLine shares one buffered reader across prompts so input arriving in a
+// single read (a multi-line paste, piped answers) survives to later prompts.
+func (ui *setupUI) readLine() (string, error) {
+	if ui.reader == nil {
+		ui.reader = bufio.NewReader(ui.in)
+	}
+	s, err := ui.reader.ReadString('\n')
 	if err != nil && err != io.EOF {
 		return "", err
 	}

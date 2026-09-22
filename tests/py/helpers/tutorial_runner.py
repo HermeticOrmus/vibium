@@ -20,6 +20,7 @@ import signal
 import subprocess
 import textwrap
 import threading
+import time
 from pathlib import Path
 
 # tests/py/helpers/ -> project root
@@ -214,17 +215,43 @@ def _vibium_children():
     return pids
 
 
+def _process_gone(pid):
+    """True when *pid* no longer runs (a zombie counts as gone)."""
+    try:
+        out = subprocess.run(
+            ["ps", "-o", "state=", "-p", str(pid)],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return not out or out.startswith("Z")
+
+
 def _kill_leaked_vibium(before):
     """Terminate vibium children a timed-out block left behind.
 
     An abandoned block's session keeps pytest's pipes open, so even a
     correctly bounded failure blocked the run's exit until the phase
     watchdog killed it, discarding the report (#397 incident 12). vibium
-    shuts its browser down on SIGTERM.
+    shuts its browser down on SIGTERM — but its graceful shutdown can
+    block on the very session wedge that timed the block out (#397
+    incident 15), so survivors are SIGKILLed after a short grace.
     """
-    for pid in _vibium_children() - before:
+    leaked = _vibium_children() - before
+    for pid in leaked:
         try:
             os.kill(pid, signal.SIGTERM)
+        except OSError:
+            pass
+    deadline = time.monotonic() + 2
+    remaining = set(leaked)
+    while remaining and time.monotonic() < deadline:
+        remaining = {pid for pid in remaining if not _process_gone(pid)}
+        if remaining:
+            time.sleep(0.1)
+    for pid in remaining:
+        try:
+            os.kill(pid, signal.SIGKILL)
         except OSError:
             pass
 

@@ -207,27 +207,59 @@ func TestSetupTryHintOnlyWhenFullyReady(t *testing.T) {
 	}
 }
 
-func TestParseProviderChoice(t *testing.T) {
-	// Digits map onto setupProviders; the accepted range must follow the
-	// list so adding a provider never silently truncates the menu.
-	for i, want := range setupProviders {
-		got, err := parseProviderChoice(string(rune('1'+i)), "openai")
-		if err != nil || got != want {
-			t.Fatalf("choice %d: got %q %v", i+1, got, err)
+func TestSetupAIModelDefaultsPerProvider(t *testing.T) {
+	home := setupTestEnv(t)
+	oldJSON := jsonOutput
+	jsonOutput = false
+	t.Cleanup(func() { jsonOutput = oldJSON })
+	path := filepath.Join(home, ".config", "vibium", "ai.env")
+	for _, tc := range []struct{ choice, model string }{
+		{"3", "claude-sonnet-4-6"}, // anthropic
+		{"4", "gemini-2.5-flash"},  // google
+	} {
+		t.Setenv("VIBIUM_AI_PROVIDER", "")
+		t.Setenv("VIBIUM_AI_MODEL", "")
+		os.Remove(path)
+		os.Remove(path + ".bak")
+		// Provider choice, Enter through the model default, Enter to skip the key.
+		in := bytes.NewBufferString(tc.choice + "\n\n\n")
+		ui := &setupUI{in: in, out: ioDiscard(), err: ioDiscard(), interactive: true}
+		sec := setupAI(&cobra.Command{}, ui, false)
+		if sec.Status != "done" {
+			t.Fatalf("choice %s: %+v", tc.choice, sec)
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(body), "export VIBIUM_AI_MODEL='"+tc.model+"'") {
+			t.Fatalf("choice %s: model default not written: %s", tc.choice, body)
 		}
 	}
-	got, err := parseProviderChoice("2", "openai")
-	if err != nil || got != "xai" {
-		t.Fatalf("got %q %v", got, err)
+}
+
+func TestParseSelectChoice(t *testing.T) {
+	// Digits map onto setupProviders; the accepted range must follow the
+	// list so adding a provider never silently truncates the menu.
+	opts := providerOptions()
+	for i, want := range setupProviders {
+		got, err := parseSelectChoice(string(rune('1'+i)), opts)
+		if err != nil || setupProviders[got] != want {
+			t.Fatalf("choice %d: got %d %v", i+1, got, err)
+		}
 	}
-	got, err = parseProviderChoice("local", "openai")
-	if err != nil || got != "local" {
-		t.Fatalf("got %q %v", got, err)
+	got, err := parseSelectChoice("2", opts)
+	if err != nil || setupProviders[got] != "xai" {
+		t.Fatalf("got %d %v", got, err)
 	}
-	if _, err := parseProviderChoice(string(rune('1'+len(setupProviders))), "openai"); err == nil {
+	got, err = parseSelectChoice("local", opts)
+	if err != nil || setupProviders[got] != "local" {
+		t.Fatalf("got %d %v", got, err)
+	}
+	if _, err := parseSelectChoice(string(rune('1'+len(setupProviders))), opts); err == nil {
 		t.Fatal("accepted digit past the menu")
 	}
-	if _, err := parseProviderChoice("nope", "openai"); err == nil {
+	if _, err := parseSelectChoice("nope", opts); err == nil {
 		t.Fatal("accepted unknown provider")
 	}
 }

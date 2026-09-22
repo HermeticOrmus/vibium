@@ -111,10 +111,6 @@ func (r *Router) handlePageExposeFunction(session *BrowserSession, cmd bidiComma
 		r.sendError(session, cmd.ID, err)
 		return
 	}
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
-		return
-	}
 
 	var added struct {
 		Result struct {
@@ -154,14 +150,11 @@ func (r *Router) ensureScriptMessageSubscription(session *BrowserSession) error 
 		return nil
 	}
 
-	resp, err := r.sendInternalCommand(session, "session.subscribe", map[string]interface{}{
+	_, err := r.sendInternalCommand(session, "session.subscribe", map[string]interface{}{
 		"events": []string{"script.message"},
 	})
 	if err != nil {
 		return err
-	}
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		return bidiErr
 	}
 	session.mu.Lock()
 	session.wsSubscribed = true
@@ -288,7 +281,7 @@ func (r *Router) handleExposeResult(session *BrowserSession, cmd bidiCommand) {
 		return
 	}
 
-	resp, err := r.sendInternalCommand(session, "script.callFunction", map[string]interface{}{
+	_, err = r.sendInternalCommand(session, "script.callFunction", map[string]interface{}{
 		"functionDeclaration": exposeDeliverScript,
 		"target":              target,
 		"arguments":           args,
@@ -296,10 +289,6 @@ func (r *Router) handleExposeResult(session *BrowserSession, cmd bidiCommand) {
 	})
 	if err != nil {
 		r.sendError(session, cmd.ID, err)
-		return
-	}
-	if bidiErr := checkBidiError(resp); bidiErr != nil {
-		r.sendError(session, cmd.ID, bidiErr)
 		return
 	}
 

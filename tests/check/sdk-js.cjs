@@ -6,7 +6,7 @@ const { browser } = require('../../clients/javascript/dist/' + (process.env.CHEC
     assert.equal(result.status, 'inconclusive');
     return;
   }
-  const bro = await browser.start({ headless: true, engine: process.env.CHECK_TEST_ENGINE || 'chrome', channel: process.env.CHECK_TEST_ENGINE === 'firefox' ? 'beta' : undefined });
+  const bro = await browser.start({ headless: true, engine: process.env.CHECK_TEST_ENGINE || 'chrome', channel: process.env.VIBIUM_ENGINE_CHANNEL || undefined });
   try {
     const page = await bro.page();
     await page.go(process.env.CHECK_TEST_URL);
